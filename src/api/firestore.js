@@ -1,5 +1,5 @@
 import {
-  collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc,
+  collection, doc, getDocs, getDoc, addDoc, setDoc, updateDoc, deleteDoc,
   query, where, orderBy, limit, startAfter, serverTimestamp,
   writeBatch, onSnapshot, getCountFromServer, arrayUnion,
 } from 'firebase/firestore'
@@ -16,9 +16,7 @@ export const getUser = (uid) =>
   getDoc(doc(db, 'users', uid)).then(d => d.exists() ? { id: d.id, ...d.data() } : null)
 
 export const createUser = (uid, data) =>
-  updateDoc(doc(db, 'users', uid), { ...data, ...tsNew() }).catch(() =>
-    addDoc(collection(db, 'users'), { uid, ...data, ...tsNew() })
-  )
+  setDoc(doc(db, 'users', uid), { uid, ...data, ...tsNew() })
 
 export const getAllUsers = () =>
   getDocs(collection(db, 'users')).then(s => s.docs.map(d => ({ id: d.id, ...d.data() })))
@@ -269,3 +267,31 @@ export const approveDriveExpense = (id, reviewerName) =>
 
 export const rejectDriveExpense = (id, reviewerName, reason) =>
   updateDoc(doc(db, 'driveExpenses', id), { status: 'rejected', reviewedBy: reviewerName, rejectionReason: reason, reviewedAt: serverTimestamp(), ...ts() })
+
+// ─── App Config ───────────────────────────────────────────────────────────────
+
+export const getAppConfig = () =>
+  getDoc(doc(db, 'config', 'app')).then(d => d.exists() ? d.data() : {})
+
+export const setAppConfig = (data) =>
+  setDoc(doc(db, 'config', 'app'), data, { merge: true })
+
+// ─── Invites ──────────────────────────────────────────────────────────────────
+
+export const createInvite = (email) => {
+  const token = crypto.randomUUID()
+  return setDoc(doc(db, 'invites', token), { email, used: false, ...tsNew() }).then(() => token)
+}
+
+export const getInvite = (token) =>
+  getDoc(doc(db, 'invites', token)).then(d => d.exists() ? { token, ...d.data() } : null)
+
+export const markInviteUsed = (token) =>
+  updateDoc(doc(db, 'invites', token), { used: true, usedAt: serverTimestamp() })
+
+// ─── Pending Users ────────────────────────────────────────────────────────────
+
+export const getPendingUsers = () =>
+  getDocs(query(collection(db, 'users'), where('status', '==', 'pending'))).then(s =>
+    s.docs.map(d => ({ id: d.id, ...d.data() }))
+  )

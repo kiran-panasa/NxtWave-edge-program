@@ -1,5 +1,12 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth'
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signInAnonymously,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  signOut,
+} from 'firebase/auth'
 import { auth } from '../firebase'
 import { getUser } from '../api/firestore'
 
@@ -14,8 +21,10 @@ export function AuthProvider({ children }) {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         setUser(firebaseUser)
-        const p = await getUser(firebaseUser.uid)
-        setProfile(p)
+        if (!firebaseUser.isAnonymous) {
+          const p = await getUser(firebaseUser.uid)
+          setProfile(p)
+        }
       } else {
         setUser(null)
         setProfile(null)
@@ -25,11 +34,16 @@ export function AuthProvider({ children }) {
     return unsub
   }, [])
 
-  const login = (email, password) => signInWithEmailAndPassword(auth, email, password)
-  const logout = () => signOut(auth)
+  const login         = (email, password) => signInWithEmailAndPassword(auth, email, password)
+  const signUp        = (email, password) => createUserWithEmailAndPassword(auth, email, password)
+  const guestLogin    = ()                => signInAnonymously(auth)
+  const resetPassword = (email)           => sendPasswordResetEmail(auth, email)
+  const logout        = ()                => signOut(auth)
+
+  const isGuest = user?.isAnonymous ?? false
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, profile, loading, isGuest, login, signUp, guestLogin, resetPassword, logout }}>
       {children}
     </AuthContext.Provider>
   )
