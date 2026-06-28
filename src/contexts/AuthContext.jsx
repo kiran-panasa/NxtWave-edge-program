@@ -8,8 +8,8 @@ import {
   signOut,
 } from 'firebase/auth'
 import { auth } from '../firebase'
-import { getUser, getPermissions } from '../api/firestore'
-import { DEFAULT_PERMISSIONS } from '../utils/roles'
+import { getUser, getPermissions, getCustomRoles } from '../api/firestore'
+import { DEFAULT_PERMISSIONS, INITIAL_ROLES } from '../utils/roles'
 
 const AuthContext = createContext(null)
 
@@ -17,6 +17,7 @@ export function AuthProvider({ children }) {
   const [user, setUser]               = useState(null)
   const [profile, setProfile]         = useState(null)
   const [permissions, setPermissions] = useState(DEFAULT_PERMISSIONS)
+  const [roles, setRoles]             = useState(INITIAL_ROLES)
   const [loading, setLoading]         = useState(true)
 
   useEffect(() => {
@@ -24,17 +25,20 @@ export function AuthProvider({ children }) {
       if (firebaseUser) {
         setUser(firebaseUser)
         if (!firebaseUser.isAnonymous) {
-          const [p, perms] = await Promise.all([
+          const [p, perms, customRoles] = await Promise.all([
             getUser(firebaseUser.uid),
             getPermissions(),
+            getCustomRoles(),
           ])
           setProfile(p)
           setPermissions(perms ?? DEFAULT_PERMISSIONS)
+          setRoles(customRoles ?? INITIAL_ROLES)
         }
       } else {
         setUser(null)
         setProfile(null)
         setPermissions(DEFAULT_PERMISSIONS)
+        setRoles(INITIAL_ROLES)
       }
       setLoading(false)
     })
@@ -55,10 +59,17 @@ export function AuthProvider({ children }) {
     return permissions[profile?.role]?.includes(pageKey) ?? false
   }
 
+  // Lookup label for a role key — falls back to a humanised version of the key
+  const roleLabel = (key) => {
+    if (key === 'admin') return 'Admin'
+    return roles.find(r => r.key === key)?.label
+      ?? key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  }
+
   return (
     <AuthContext.Provider value={{
-      user, profile, permissions, loading,
-      isGuest, canAccess,
+      user, profile, permissions, roles, loading,
+      isGuest, canAccess, roleLabel,
       login, signUp, guestLogin, resetPassword, logout,
     }}>
       {children}

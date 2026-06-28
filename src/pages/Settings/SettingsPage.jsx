@@ -9,10 +9,12 @@ import {
   getAppConfig, setAppConfig,
   createInvite, getPendingUsers,
   getPermissions, setPermissions,
+  getCustomRoles, saveCustomRoles,
 } from '../../api/firestore'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../../firebase'
-import { ROLES, ROLE_LABELS, PAGES, CONFIGURABLE_ROLES, DEFAULT_PERMISSIONS } from '../../utils/roles'
+import { PAGES, INITIAL_ROLES, DEFAULT_PERMISSIONS, toRoleKey } from '../../utils/roles'
+import { useAuth } from '../../contexts/AuthContext'
 
 const TABS = ['Users', 'Permissions', 'General']
 
@@ -26,7 +28,6 @@ export default function SettingsPage() {
         <p className="text-sm text-gray-500 mt-0.5">Manage users, permissions, and app configuration</p>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">
         {TABS.map(tab => (
           <button
@@ -53,11 +54,12 @@ export default function SettingsPage() {
 // ─── Users Tab ────────────────────────────────────────────────────────────────
 
 function UsersTab() {
+  const { roles } = useAuth()
   const [users, setUsers]     = useState([])
   const [pending, setPending] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal]     = useState(false)
-  const [form, setForm]       = useState({ name: '', email: '', password: '', role: 'auditor' })
+  const [form, setForm]       = useState({ name: '', email: '', password: '', role: '' })
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
@@ -65,13 +67,17 @@ function UsersTab() {
   const [inviting, setInviting]       = useState(false)
   const [inviteError, setInviteError] = useState('')
 
+  // Default role to first available when roles load
+  useEffect(() => {
+    if (roles.length > 0 && !form.role) setForm(f => ({ ...f, role: roles[0].key }))
+  }, [roles])
+
   const load = async () => {
     const [all, pend] = await Promise.all([getAllUsers(), getPendingUsers()])
     setUsers(all)
     setPending(pend)
     setLoading(false)
   }
-
   useEffect(() => { load() }, [])
 
   const handleCreate = async (e) => {
@@ -83,7 +89,7 @@ function UsersTab() {
       await createUser(cred.user.uid, { name: form.name, email: form.email, role: form.role, status: 'active' })
       await load()
       setModal(false)
-      setForm({ name: '', email: '', password: '', role: 'auditor' })
+      setForm({ name: '', email: '', password: '', role: roles[0]?.key ?? '' })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -91,13 +97,12 @@ function UsersTab() {
     }
   }
 
-  const toggleStatus = async (user) => {
-    await updateUser(user.id, { status: user.status === 'active' ? 'inactive' : 'active' })
+  const toggleStatus = async (u) => {
+    await updateUser(u.id, { status: u.status === 'active' ? 'inactive' : 'active' })
     await load()
   }
-
-  const approveUser = async (user) => { await updateUser(user.id, { status: 'active' }); await load() }
-  const rejectUser  = async (user) => { await updateUser(user.id, { status: 'inactive' }); await load() }
+  const approveUser = async (u) => { await updateUser(u.id, { status: 'active' }); await load() }
+  const rejectUser  = async (u) => { await updateUser(u.id, { status: 'inactive' }); await load() }
 
   const handleInvite = async (e) => {
     e.preventDefault()
@@ -115,9 +120,10 @@ function UsersTab() {
     }
   }
 
+  const roleLabel = (key) => roles.find(r => r.key === key)?.label ?? key
+
   return (
     <div className="space-y-6">
-      {/* Pending Approvals */}
       {pending.length > 0 && (
         <Card className="p-6 border-yellow-200 bg-yellow-50">
           <h2 className="text-sm font-semibold text-yellow-800 mb-4">Pending Approvals ({pending.length})</h2>
@@ -138,7 +144,6 @@ function UsersTab() {
         </Card>
       )}
 
-      {/* Invite User */}
       <Card className="p-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">Invite User</h2>
         <form onSubmit={handleInvite} className="flex gap-3 items-end">
@@ -159,7 +164,6 @@ function UsersTab() {
         )}
       </Card>
 
-      {/* Users Table */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-gray-700">Users</h2>
@@ -183,7 +187,7 @@ function UsersTab() {
                 <tr key={u.id} className="border-b border-gray-50">
                   <td className="py-2.5 pr-4 font-medium text-gray-900">{u.name}</td>
                   <td className="py-2.5 pr-4 text-gray-600">{u.email}</td>
-                  <td className="py-2.5 pr-4 text-gray-600">{ROLE_LABELS[u.role] ?? u.role}</td>
+                  <td className="py-2.5 pr-4 text-gray-600">{u.role === 'admin' ? 'Admin' : roleLabel(u.role)}</td>
                   <td className="py-2.5 pr-4">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                       u.status === 'active'  ? 'bg-green-100 text-green-700' :
@@ -206,7 +210,6 @@ function UsersTab() {
         )}
       </Card>
 
-      {/* Add User Modal */}
       <Modal open={modal} onClose={() => setModal(false)} title="Add User">
         <form onSubmit={handleCreate} className="space-y-4">
           <Input label="Name *" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
@@ -219,7 +222,7 @@ function UsersTab() {
               value={form.role}
               onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
             >
-              {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+              {roles.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
             </select>
           </div>
           {error && <p className="text-xs text-red-500">{error}</p>}
@@ -236,35 +239,69 @@ function UsersTab() {
 // ─── Permissions Tab ──────────────────────────────────────────────────────────
 
 function PermissionsTab() {
+  const [roles, setRoles]     = useState(null)
   const [perms, setPerms]     = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
 
+  // Add role form
+  const [newLabel, setNewLabel]       = useState('')
+  const [addError, setAddError]       = useState('')
+
+  // Delete confirmation
+  const [confirmDelete, setConfirmDelete] = useState(null) // role key
+
   useEffect(() => {
-    getPermissions().then(p => {
+    Promise.all([getCustomRoles(), getPermissions()]).then(([r, p]) => {
+      setRoles(r ?? INITIAL_ROLES)
       setPerms(p ?? DEFAULT_PERMISSIONS)
       setLoading(false)
     })
   }, [])
 
-  const toggle = (role, pageKey) => {
+  const toggle = (roleKey, pageKey) => {
     setPerms(prev => {
-      const current = prev[role] ?? []
+      const current = prev[roleKey] ?? []
       const next = current.includes(pageKey)
         ? current.filter(k => k !== pageKey)
         : [...current, pageKey]
-      return { ...prev, [role]: next }
+      return { ...prev, [roleKey]: next }
     })
     setSaved(false)
   }
 
   const handleSave = async () => {
     setSaving(true)
-    await setPermissions(perms)
+    await Promise.all([saveCustomRoles(roles), setPermissions(perms)])
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  const handleAddRole = (e) => {
+    e.preventDefault()
+    setAddError('')
+    const label = newLabel.trim()
+    if (!label) return
+    const key = toRoleKey(label)
+    if (!key) { setAddError('Invalid name.'); return }
+    if (roles.find(r => r.key === key)) { setAddError('A role with this name already exists.'); return }
+    setRoles(prev => [...prev, { key, label }])
+    setPerms(prev => ({ ...prev, [key]: [] }))
+    setNewLabel('')
+    setSaved(false)
+  }
+
+  const handleDeleteRole = (roleKey) => {
+    setRoles(prev => prev.filter(r => r.key !== roleKey))
+    setPerms(prev => {
+      const next = { ...prev }
+      delete next[roleKey]
+      return next
+    })
+    setConfirmDelete(null)
+    setSaved(false)
   }
 
   if (loading) return <div className="flex justify-center py-12"><Spinner /></div>
@@ -286,14 +323,29 @@ function PermissionsTab() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="py-2 pr-6 text-left font-medium text-gray-500 w-40">Page</th>
-                {/* Admin column — always full access */}
-                <th className="py-2 px-4 text-center font-medium text-gray-500">
-                  <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full">Admin</span>
+                <th className="py-2 pr-6 text-left font-medium text-gray-500 w-36">Page</th>
+                {/* Admin — always full access */}
+                <th className="py-2 px-4 text-center font-medium text-gray-400">
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full">Admin</span>
+                  </div>
                 </th>
-                {CONFIGURABLE_ROLES.map(role => (
-                  <th key={role} className="py-2 px-4 text-center font-medium text-gray-500">
-                    <span className="text-xs">{ROLE_LABELS[role]}</span>
+                {roles.map(role => (
+                  <th key={role.key} className="py-2 px-4 text-center font-medium text-gray-500">
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="text-xs whitespace-nowrap">{role.label}</span>
+                      {confirmDelete === role.key ? (
+                        <div className="flex gap-1 mt-0.5">
+                          <button onClick={() => handleDeleteRole(role.key)} className="text-xs text-red-600 hover:underline">Confirm</button>
+                          <span className="text-gray-300">|</span>
+                          <button onClick={() => setConfirmDelete(null)} className="text-xs text-gray-400 hover:underline">Cancel</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setConfirmDelete(role.key)} className="text-xs text-gray-300 hover:text-red-400 transition-colors">
+                          Remove
+                        </button>
+                      )}
+                    </div>
                   </th>
                 ))}
               </tr>
@@ -304,14 +356,14 @@ function PermissionsTab() {
                   <td className="py-3 pr-6 font-medium text-gray-700">{label}</td>
                   {/* Admin — locked on */}
                   <td className="py-3 px-4 text-center">
-                    <input type="checkbox" checked readOnly className="accent-brand-600 cursor-not-allowed opacity-50" />
+                    <input type="checkbox" checked readOnly className="accent-brand-600 cursor-not-allowed opacity-40" />
                   </td>
-                  {CONFIGURABLE_ROLES.map(role => (
-                    <td key={role} className="py-3 px-4 text-center">
+                  {roles.map(role => (
+                    <td key={role.key} className="py-3 px-4 text-center">
                       <input
                         type="checkbox"
-                        checked={perms[role]?.includes(key) ?? false}
-                        onChange={() => toggle(role, key)}
+                        checked={perms[role.key]?.includes(key) ?? false}
+                        onChange={() => toggle(role.key, key)}
                         className="accent-brand-600 cursor-pointer"
                       />
                     </td>
@@ -321,6 +373,28 @@ function PermissionsTab() {
             </tbody>
           </table>
         </div>
+      </Card>
+
+      {/* Add new role */}
+      <Card className="p-6">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">Add Role</h2>
+        <form onSubmit={handleAddRole} className="flex gap-3 items-end">
+          <div className="flex-1">
+            <Input
+              label="Role name"
+              value={newLabel}
+              onChange={e => { setNewLabel(e.target.value); setAddError('') }}
+              placeholder="e.g. Finance Team"
+            />
+            {newLabel && (
+              <p className="text-xs text-gray-400 mt-1">
+                Key: <code className="bg-gray-100 px-1 rounded">{toRoleKey(newLabel)}</code>
+              </p>
+            )}
+            {addError && <p className="text-xs text-red-500 mt-1">{addError}</p>}
+          </div>
+          <Button type="submit" disabled={!newLabel.trim()}>Add role</Button>
+        </form>
       </Card>
     </div>
   )

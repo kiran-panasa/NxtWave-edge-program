@@ -14,7 +14,7 @@ const NAV = [
 ]
 
 export default function Sidebar() {
-  const { profile, isGuest, canAccess, logout } = useAuth()
+  const { profile, isGuest, canAccess, roleLabel, logout } = useAuth()
   const isAdmin = profile?.role === 'admin'
 
   const visibleNav = NAV.filter(item => {
@@ -60,7 +60,7 @@ export default function Sidebar() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-900 truncate">{isGuest ? 'Guest' : (profile?.name ?? 'User')}</p>
-            <p className="text-xs text-gray-500 capitalize">{isGuest ? 'Read-only' : (profile?.role?.replace('_', ' ') ?? '')}</p>
+            <p className="text-xs text-gray-500">{isGuest ? 'Read-only' : roleLabel(profile?.role ?? '')}</p>
           </div>
         </div>
         <button

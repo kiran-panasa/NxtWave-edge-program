@@ -279,6 +279,12 @@ export const getPermissions = () =>
 export const setPermissions = (data) =>
   setDoc(doc(db, 'config', 'permissions'), data)
 
+export const getCustomRoles = () =>
+  getDoc(doc(db, 'config', 'roles')).then(d => d.exists() ? d.data().roles : null)
+
+export const saveCustomRoles = (roles) =>
+  setDoc(doc(db, 'config', 'roles'), { roles })
+
 export const setAppConfig = (data) =>
   setDoc(doc(db, 'config', 'app'), data, { merge: true })
 
