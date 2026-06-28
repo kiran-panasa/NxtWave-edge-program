@@ -273,6 +273,12 @@ export const rejectDriveExpense = (id, reviewerName, reason) =>
 export const getAppConfig = () =>
   getDoc(doc(db, 'config', 'app')).then(d => d.exists() ? d.data() : {})
 
+export const getPermissions = () =>
+  getDoc(doc(db, 'config', 'permissions')).then(d => d.exists() ? d.data() : null)
+
+export const setPermissions = (data) =>
+  setDoc(doc(db, 'config', 'permissions'), data)
+
 export const setAppConfig = (data) =>
   setDoc(doc(db, 'config', 'app'), data, { merge: true })
 
