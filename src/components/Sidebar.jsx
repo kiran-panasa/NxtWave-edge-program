@@ -27,7 +27,7 @@ export default function Sidebar() {
   })
 
   return (
-    <aside className="w-60 min-h-screen bg-white border-r border-gray-200 flex flex-col">
+    <aside className="w-60 h-screen sticky top-0 bg-white border-r border-gray-200 flex flex-col overflow-y-auto">
       <div className="px-6 py-5 border-b border-gray-100">
         <div className="text-brand-700 font-bold text-lg leading-tight">NxtWave</div>
         <div className="text-gray-500 text-xs mt-0.5">Edge Program</div>

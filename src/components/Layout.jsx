@@ -12,9 +12,9 @@ export default function Layout({ children }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex h-screen overflow-hidden bg-gray-50">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-y-auto">
         {isGuest && (
           <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 flex items-center justify-between">
             <p className="text-xs text-amber-700">
