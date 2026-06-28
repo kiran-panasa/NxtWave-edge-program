@@ -55,7 +55,7 @@ export default function SettingsPage() {
 // ─── Users Tab ────────────────────────────────────────────────────────────────
 
 function UsersTab() {
-  const { roles } = useAuth()
+  const { roles, profile: currentProfile } = useAuth()
   const [users, setUsers]     = useState([])
   const [pending, setPending] = useState([])
   const [loading, setLoading] = useState(true)
@@ -67,6 +67,7 @@ function UsersTab() {
   const [inviteLink, setInviteLink]   = useState('')
   const [inviting, setInviting]       = useState(false)
   const [inviteError, setInviteError] = useState('')
+  const [changingRole, setChangingRole] = useState({}) // userId → true while saving
 
   // Default role to first available when roles load
   useEffect(() => {
@@ -104,6 +105,13 @@ function UsersTab() {
   }
   const approveUser = async (u) => { await updateUser(u.id, { status: 'active' }); await load() }
   const rejectUser  = async (u) => { await updateUser(u.id, { status: 'inactive' }); await load() }
+
+  const changeRole = async (u, newRole) => {
+    setChangingRole(prev => ({ ...prev, [u.id]: true }))
+    await updateUser(u.id, { role: newRole })
+    await load()
+    setChangingRole(prev => ({ ...prev, [u.id]: false }))
+  }
 
   const handleInvite = async (e) => {
     e.preventDefault()
@@ -188,7 +196,23 @@ function UsersTab() {
                 <tr key={u.id} className="border-b border-gray-50">
                   <td className="py-2.5 pr-4 font-medium text-gray-900">{u.name}</td>
                   <td className="py-2.5 pr-4 text-gray-600">{u.email}</td>
-                  <td className="py-2.5 pr-4 text-gray-600">{u.role === 'admin' ? 'Admin' : roleLabel(u.role)}</td>
+                  <td className="py-2.5 pr-4">
+                    {u.role === 'admin' ? (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 font-medium">Admin</span>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <select
+                          className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-50"
+                          value={u.role ?? ''}
+                          onChange={e => changeRole(u, e.target.value)}
+                          disabled={changingRole[u.id]}
+                        >
+                          {roles.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+                        </select>
+                        {changingRole[u.id] && <Spinner size="sm" />}
+                      </div>
+                    )}
+                  </td>
                   <td className="py-2.5 pr-4">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                       u.status === 'active'  ? 'bg-green-100 text-green-700' :
