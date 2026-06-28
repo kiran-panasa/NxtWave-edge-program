@@ -1,7 +1,7 @@
 import {
   collection, doc, getDocs, getDoc, addDoc, setDoc, updateDoc, deleteDoc,
   query, where, orderBy, limit, startAfter, serverTimestamp,
-  writeBatch, onSnapshot, getCountFromServer, arrayUnion,
+  writeBatch, onSnapshot, getCountFromServer, arrayUnion, runTransaction,
 } from 'firebase/firestore'
 import { db } from '../firebase'
 
@@ -34,8 +34,10 @@ export const getColleges = () =>
 export const getCollege = (id) =>
   getDoc(doc(db, 'colleges', id)).then(d => d.exists() ? { id: d.id, ...d.data() } : null)
 
-export const createCollege = (data) =>
-  addDoc(collection(db, 'colleges'), { ...data, ...tsNew() })
+export const createCollege = async (data) => {
+  const collegeId = await generateCollegeId()
+  return addDoc(collection(db, 'colleges'), { ...data, collegeId, ...tsNew() })
+}
 
 export const updateCollege = (id, data) =>
   updateDoc(doc(db, 'colleges', id), { ...data, ...ts() })
@@ -307,3 +309,61 @@ export const getPendingUsers = () =>
   getDocs(query(collection(db, 'users'), where('status', '==', 'pending'))).then(s =>
     s.docs.map(d => ({ id: d.id, ...d.data() }))
   )
+
+// ─── College ID ───────────────────────────────────────────────────────────────
+
+export const getCollegeIdConfig = () =>
+  getDoc(doc(db, 'config', 'app')).then(d => {
+    const data = d.exists() ? d.data() : {}
+    return { prefix: data.collegeIdPrefix ?? 'CLG', digits: data.collegeIdDigits ?? 4 }
+  })
+
+export const setCollegeIdConfig = ({ prefix, digits }) =>
+  setDoc(doc(db, 'config', 'app'), { collegeIdPrefix: prefix, collegeIdDigits: digits }, { merge: true })
+
+export const generateCollegeId = async () => {
+  const cfg     = await getCollegeIdConfig()
+  const counter = doc(db, 'config', 'counters')
+  let newCount
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(counter)
+    newCount   = (snap.exists() ? (snap.data().collegeCount ?? 0) : 0) + 1
+    tx.set(counter, { collegeCount: newCount }, { merge: true })
+  })
+  return `${cfg.prefix}-${String(newCount).padStart(cfg.digits, '0')}`
+}
+
+// ─── Drives ───────────────────────────────────────────────────────────────────
+
+const toDrive = d => ({ id: d.id, ...d.data() })
+
+export const createDrive = (data) =>
+  addDoc(collection(db, 'drives'), { ...data, ...tsNew() })
+
+export const getDrive = (id) =>
+  getDoc(doc(db, 'drives', id)).then(d => d.exists() ? toDrive(d) : null)
+
+export const getDrivesByCollege = (collegeId) =>
+  getDocs(query(collection(db, 'drives'), where('collegeId', '==', collegeId), orderBy('createdAt', 'desc')))
+    .then(s => s.docs.map(toDrive))
+
+export const updateDrive = (id, data) =>
+  updateDoc(doc(db, 'drives', id), { ...data, ...ts() })
+
+export const addDriveHistory = (id, entry) =>
+  updateDoc(doc(db, 'drives', id), { history: arrayUnion({ ...entry, at: new Date().toISOString() }), ...ts() })
+
+export const updateDriveInfra = (id, infra, changeEntry) =>
+  updateDoc(doc(db, 'drives', id), {
+    infra,
+    infraChangelog: arrayUnion({ ...changeEntry, at: new Date().toISOString() }),
+    ...ts(),
+  })
+
+export const getAllDrivesPendingApproval = () =>
+  getDocs(query(collection(db, 'drives'), where('status', '==', 'pending_approval'), orderBy('proposedDate')))
+    .then(s => s.docs.map(toDrive))
+
+export const getAllDrivesForCalendar = () =>
+  getDocs(query(collection(db, 'drives'), where('status', 'in', ['approved', 'college_confirmed', 'completed'])))
+    .then(s => s.docs.map(toDrive))

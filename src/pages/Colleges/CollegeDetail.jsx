@@ -6,10 +6,12 @@ import Button from '../../components/ui/Button'
 import Modal from '../../components/ui/Modal'
 import Spinner from '../../components/ui/Spinner'
 import ExpenseForm from '../../components/ExpenseForm'
+import DriveForm from '../Drives/DriveForm'
+import DriveDetail from '../Drives/DriveDetail'
 import {
   getCollege, getStudentsByCollege, getAssessmentsByCollege,
   getDriveExpensesByCollege, createDriveExpense, updateDriveExpense,
-  submitDriveExpense, getDriveExpense,
+  submitDriveExpense, getDriveExpense, getDrivesByCollege, getDrive,
 } from '../../api/firestore'
 import { STAGE_LABELS, STAGE_COLORS, OUTREACH_LABELS } from '../../utils/stages'
 import { useAuth } from '../../contexts/AuthContext'
@@ -36,15 +38,24 @@ export default function CollegeDetail() {
   const [students, setStudents]       = useState([])
   const [assessments, setAssessments] = useState([])
   const [expenses, setExpenses]       = useState([])
+  const [drives, setDrives]           = useState([])
   const [loading, setLoading]         = useState(true)
-  const [tab, setTab]                 = useState('students')
+  const [tab, setTab]                 = useState('drives')
 
   const [expenseModal, setExpenseModal]   = useState(false)
   const [selectedExp, setSelectedExp]     = useState(null)
   const [creatingExp, setCreatingExp]     = useState(false)
 
+  // Drive state
+  const [driveModal, setDriveModal]       = useState(false)
+  const [driveModalMode, setDriveModalMode] = useState('list') // 'form' | 'detail'
+  const [selectedDrive, setSelectedDrive] = useState(null)
+
   const loadExpenses = () =>
     getDriveExpensesByCollege(id).then(setExpenses)
+
+  const loadDrives = () =>
+    getDrivesByCollege(id).then(setDrives)
 
   useEffect(() => {
     Promise.all([
@@ -52,11 +63,13 @@ export default function CollegeDetail() {
       getStudentsByCollege(id),
       getAssessmentsByCollege(id),
       getDriveExpensesByCollege(id),
-    ]).then(([c, s, a, e]) => {
+      getDrivesByCollege(id),
+    ]).then(([c, s, a, e, d]) => {
       setCollege(c)
       setStudents(s)
       setAssessments(a)
       setExpenses(e)
+      setDrives(d)
     }).finally(() => setLoading(false))
   }, [id])
 
@@ -119,7 +132,14 @@ export default function CollegeDetail() {
 
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">{college.name}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold text-gray-900">{college.name}</h1>
+            {college.collegeId && (
+              <span className="text-xs font-mono bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">
+                {college.collegeId}
+              </span>
+            )}
+          </div>
           <p className="text-sm text-gray-500 mt-0.5">{[college.city, college.state].filter(Boolean).join(', ')}</p>
         </div>
         <Badge
@@ -141,7 +161,7 @@ export default function CollegeDetail() {
         </Card>
         <Card className="p-4">
           <p className="text-xs text-gray-500">Drives</p>
-          <p className="text-3xl font-semibold text-gray-900 mt-1">{expenses.length}</p>
+          <p className="text-3xl font-semibold text-gray-900 mt-1">{drives.length}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs text-gray-500">Approved Expenses</p>
@@ -164,7 +184,7 @@ export default function CollegeDetail() {
       )}
 
       <div className="flex gap-1 border-b border-gray-200">
-        {['students', 'assessments', 'expenses'].map(t => (
+        {['drives', 'students', 'assessments', 'expenses'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -173,12 +193,23 @@ export default function CollegeDetail() {
             }`}
           >
             {t}
+            {t === 'drives' && drives.length > 0 && (
+              <span className="ml-1.5 text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{drives.length}</span>
+            )}
             {t === 'expenses' && expenses.length > 0 && (
               <span className="ml-1.5 text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{expenses.length}</span>
             )}
           </button>
         ))}
       </div>
+
+      {tab === 'drives' && (
+        <DrivesTab
+          college={college}
+          drives={drives}
+          onRefresh={loadDrives}
+        />
+      )}
 
       {tab === 'students' && (
         <Card>
@@ -309,6 +340,159 @@ export default function CollegeDetail() {
           <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
             <strong>Rejected:</strong> {selectedExp.rejectionReason}
           </div>
+        )}
+      </Modal>
+    </div>
+  )
+}
+
+// ── Drives Tab ────────────────────────────────────────────────────────────────
+
+const DRIVE_STATUS_COLORS = {
+  draft:             'bg-gray-100 text-gray-600',
+  pending_approval:  'bg-yellow-100 text-yellow-700',
+  changes_requested: 'bg-orange-100 text-orange-700',
+  approved:          'bg-blue-100 text-blue-700',
+  college_confirmed: 'bg-purple-100 text-purple-700',
+  completed:         'bg-green-100 text-green-700',
+  cancelled:         'bg-red-100 text-red-700',
+}
+
+const DRIVE_STATUS_LABELS = {
+  draft:             'Draft',
+  pending_approval:  'Pending Approval',
+  changes_requested: 'Changes Requested',
+  approved:          'Approved',
+  college_confirmed: 'College Confirmed',
+  completed:         'Completed',
+  cancelled:         'Cancelled',
+}
+
+function DrivesTab({ college, drives, onRefresh }) {
+  const [modal, setModal]             = useState(null)   // null | 'form' | 'detail'
+  const [selectedDrive, setSelectedDrive] = useState(null)
+  const [freshDrive, setFreshDrive]   = useState(null)
+  const [loadingDrive, setLoadingDrive] = useState(false)
+
+  const openDetail = async (drive) => {
+    setLoadingDrive(true)
+    const d = await getDrive(drive.id)
+    setFreshDrive(d)
+    setSelectedDrive(d)
+    setModal('detail')
+    setLoadingDrive(false)
+  }
+
+  const refreshDetail = async () => {
+    if (!selectedDrive) return
+    const d = await getDrive(selectedDrive.id)
+    setFreshDrive(d)
+    setSelectedDrive(d)
+    onRefresh()
+  }
+
+  // Group drives by academic year
+  const byYear = drives.reduce((acc, d) => {
+    const yr = d.academicYear ?? 'Unknown'
+    if (!acc[yr]) acc[yr] = []
+    acc[yr].push(d)
+    return acc
+  }, {})
+
+  const years = Object.keys(byYear).sort((a, b) => b.localeCompare(a))
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button size="sm" onClick={() => { setSelectedDrive(null); setModal('form') }}>
+          + New Drive Request
+        </Button>
+      </div>
+
+      {drives.length === 0 ? (
+        <Card className="p-8 text-center text-gray-400">
+          No drives scheduled yet. Click "+ New Drive Request" to get started.
+        </Card>
+      ) : (
+        years.map(year => (
+          <div key={year}>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+              AY {year}
+            </p>
+            <Card>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 text-left">
+                    <th className="px-4 py-3 font-medium text-gray-500">Date</th>
+                    <th className="px-4 py-3 font-medium text-gray-500">Time Slot</th>
+                    <th className="px-4 py-3 font-medium text-gray-500">Expected</th>
+                    <th className="px-4 py-3 font-medium text-gray-500">Status</th>
+                    <th className="px-4 py-3 font-medium text-gray-500">Team</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {byYear[year].map(d => (
+                    <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-700 font-medium">{d.proposedDate ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-500">{d.timeSlot ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-500">{d.expectedStudentCount ?? '—'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${DRIVE_STATUS_COLORS[d.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                          {DRIVE_STATUS_LABELS[d.status] ?? d.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-400">
+                        {d.assignedTeam?.length > 0 ? d.assignedTeam.map(m => m.name).join(', ') : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => openDetail(d)}
+                          disabled={loadingDrive}
+                          className="text-xs text-brand-600 hover:underline disabled:opacity-40"
+                        >
+                          {d.status === 'draft' ? 'Edit' : 'View'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          </div>
+        ))
+      )}
+
+      {/* New drive form modal */}
+      <Modal
+        open={modal === 'form'}
+        onClose={() => setModal(null)}
+        title="New Drive Request"
+        size="lg"
+      >
+        {modal === 'form' && (
+          <DriveForm
+            college={college}
+            drive={selectedDrive}
+            onSave={() => { setModal(null); onRefresh() }}
+            onCancel={() => setModal(null)}
+          />
+        )}
+      </Modal>
+
+      {/* Drive detail modal */}
+      <Modal
+        open={modal === 'detail'}
+        onClose={() => { setModal(null); setFreshDrive(null) }}
+        title={`Drive — ${freshDrive?.proposedDate ?? selectedDrive?.proposedDate ?? ''}`}
+        size="lg"
+      >
+        {modal === 'detail' && freshDrive && (
+          <DriveDetail
+            drive={freshDrive}
+            onUpdate={refreshDetail}
+            onClose={() => { setModal(null); setFreshDrive(null) }}
+          />
         )}
       </Modal>
     </div>

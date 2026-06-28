@@ -196,6 +196,7 @@ export default function CollegesPage() {
                 <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3">
                     <Link to={`/colleges/${c.id}`} className="font-medium text-brand-700 hover:underline">{c.name}</Link>
+                    {c.collegeId && <span className="ml-2 text-xs font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{c.collegeId}</span>}
                   </td>
                   <td className="px-4 py-3 text-gray-600">{[c.city, c.state].filter(Boolean).join(', ') || '—'}</td>
                   <td className="px-4 py-3 text-gray-600">

@@ -4,8 +4,17 @@ import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
 import { useEffect } from 'react'
-import { getColleges, batchCreateStudents, createAssessmentImport, updateCollege } from '../../api/firestore'
+import { getColleges, getDrivesByCollege, batchCreateStudents, createAssessmentImport, updateCollege } from '../../api/firestore'
 import { STAGES } from '../../utils/stages'
+
+const DRIVE_STATUS_LABELS = {
+  draft:             'Draft',
+  pending_approval:  'Pending Approval',
+  changes_requested: 'Changes Requested',
+  approved:          'Approved',
+  college_confirmed: 'Confirmed',
+  completed:         'Completed',
+}
 
 const REQUIRED_COLS = ['name', 'email']
 const EXPECTED_COLS = ['name', 'email', 'phone', 'uid']
@@ -25,6 +34,8 @@ export default function ImportPage() {
   const fileRef              = useRef(null)
   const [colleges, setColleges] = useState([])
   const [collegeId, setCollegeId] = useState('')
+  const [drives, setDrives]  = useState([])
+  const [driveId, setDriveId] = useState('')
   const [rows, setRows]      = useState([])
   const [fileName, setFileName] = useState('')
   const [errors, setErrors]  = useState([])
@@ -32,6 +43,13 @@ export default function ImportPage() {
   const [done, setDone]      = useState(null)
 
   useEffect(() => { getColleges().then(setColleges) }, [])
+
+  const handleCollegeChange = (id) => {
+    setCollegeId(id)
+    setDriveId('')
+    setDrives([])
+    if (id) getDrivesByCollege(id).then(setDrives)
+  }
 
   const handleFile = (e) => {
     const file = e.target.files[0]
@@ -60,7 +78,8 @@ export default function ImportPage() {
 
   const handleImport = async () => {
     if (!collegeId) return
-    const college = colleges.find(c => c.id === collegeId)
+    const college     = colleges.find(c => c.id === collegeId)
+    const selectedDrv = drives.find(d => d.id === driveId)
     setImporting(true)
     try {
       const students = rows.map(r => ({
@@ -70,12 +89,14 @@ export default function ImportPage() {
         uid:          String(r.uid  ?? '').trim(),
         collegeId,
         collegeName:  college?.name ?? '',
+        driveId:      driveId || null,
+        driveDate:    selectedDrv?.proposedDate ?? null,
         currentStage: STAGES.ASSESSMENT_IMPORTED,
         stageHistory: [{ stage: STAGES.ASSESSMENT_IMPORTED, at: new Date().toISOString() }],
       }))
 
       await batchCreateStudents(students)
-      await createAssessmentImport({ collegeId, fileName, studentCount: students.length })
+      await createAssessmentImport({ collegeId, driveId: driveId || null, fileName, studentCount: students.length })
       await updateCollege(collegeId, { outreachStatus: 'assessment_done' })
 
       setDone(students.length)
@@ -103,11 +124,32 @@ export default function ImportPage() {
           <select
             className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 max-w-sm"
             value={collegeId}
-            onChange={e => setCollegeId(e.target.value)}
+            onChange={e => handleCollegeChange(e.target.value)}
           >
             <option value="">Choose college…</option>
-            {colleges.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {colleges.map(c => <option key={c.id} value={c.id}>{c.name}{c.collegeId ? ` (${c.collegeId})` : ''}</option>)}
           </select>
+
+        {collegeId && (
+          <div className="flex flex-col gap-1 mt-3">
+            <label className="text-sm font-medium text-gray-700">Link to Drive <span className="text-gray-400 font-normal">(optional)</span></label>
+            <select
+              className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 max-w-sm"
+              value={driveId}
+              onChange={e => setDriveId(e.target.value)}
+            >
+              <option value="">No drive — standalone import</option>
+              {drives.map(d => (
+                <option key={d.id} value={d.id}>
+                  {d.proposedDate} · {d.academicYear} · {DRIVE_STATUS_LABELS[d.status] ?? d.status}
+                </option>
+              ))}
+            </select>
+            {drives.length === 0 && (
+              <p className="text-xs text-gray-400">No drives found for this college. Create one from the college page first.</p>
+            )}
+          </div>
+        )}
         </div>
 
         <div>
