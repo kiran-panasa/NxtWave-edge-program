@@ -9,6 +9,7 @@ import Input from '../../components/ui/Input'
 import Spinner from '../../components/ui/Spinner'
 import { getColleges, createCollege, updateCollege, batchUpsertColleges } from '../../api/firestore'
 import { OUTREACH_LABELS, OUTREACH_STATUSES } from '../../utils/stages'
+import { useAuth } from '../../contexts/AuthContext'
 
 const OUTREACH_COLORS = {
   contacted:            'bg-gray-100 text-gray-600',
@@ -34,6 +35,7 @@ function downloadCollegeSample() {
 }
 
 export default function CollegesPage() {
+  const { isGuest } = useAuth()
   const [colleges, setColleges]   = useState([])
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState('')
@@ -54,7 +56,10 @@ export default function CollegesPage() {
   const [bulkSaving, setBulkSaving] = useState(false)
   const [bulkDone, setBulkDone]     = useState(null)
 
-  const load = () => getColleges().then(setColleges).finally(() => setLoading(false))
+  const load = () => {
+    if (isGuest) { setLoading(false); return }
+    getColleges().then(setColleges).finally(() => setLoading(false))
+  }
   useEffect(() => { load() }, [])
 
   const filtered = colleges.filter(c => {

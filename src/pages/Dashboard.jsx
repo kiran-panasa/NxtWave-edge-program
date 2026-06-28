@@ -3,6 +3,7 @@ import Card from '../components/ui/Card'
 import Spinner from '../components/ui/Spinner'
 import { getStageCount } from '../api/firestore'
 import { FUNNEL_STAGES } from '../utils/stages'
+import { useAuth } from '../contexts/AuthContext'
 
 function StatCard({ label, value, sub }) {
   return (
@@ -36,10 +37,12 @@ function FunnelBar({ label, count, max, index }) {
 }
 
 export default function Dashboard() {
+  const { isGuest } = useAuth()
   const [counts, setCounts] = useState({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (isGuest) { setLoading(false); return }
     Promise.all(
       FUNNEL_STAGES.map(s => getStageCount(s.key).then(n => ({ key: s.key, count: n })))
     ).then(results => {

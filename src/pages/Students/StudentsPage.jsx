@@ -6,10 +6,12 @@ import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
 import { getStudentsPage, getColleges } from '../../api/firestore'
 import { STAGE_LABELS, STAGE_COLORS, STAGES } from '../../utils/stages'
+import { useAuth } from '../../contexts/AuthContext'
 
 const STAGE_OPTIONS = Object.entries(STAGE_LABELS).map(([k, v]) => ({ value: k, label: v }))
 
 export default function StudentsPage() {
+  const { isGuest } = useAuth()
   const [students, setStudents]     = useState([])
   const [lastDoc, setLastDoc]       = useState(null)
   const [hasMore, setHasMore]       = useState(false)
@@ -19,6 +21,7 @@ export default function StudentsPage() {
   const [filters, setFilters]       = useState({ collegeId: '', stage: '' })
 
   const loadPage = useCallback(async (after = null, reset = true) => {
+    if (isGuest) { setLoading(false); return }
     const setter = reset ? setLoading : setLoadingMore
     setter(true)
     const { students: rows, lastDoc: last } = await getStudentsPage({

@@ -33,7 +33,7 @@ const catTotal = (items) => (items ?? []).reduce((s, i) => s + (i.amount ?? 0), 
 const fmt = (n) => `₹${n.toLocaleString('en-IN')}`
 
 export default function ExpensesPage() {
-  const { profile } = useAuth()
+  const { profile, isGuest } = useAuth()
   const isAdmin = profile?.role === 'admin'
 
   const [allExpenses, setAllExpenses] = useState([])
@@ -55,6 +55,7 @@ export default function ExpensesPage() {
   const [actioning,     setActioning]     = useState(false)
 
   const load = () => {
+    if (isGuest) { setLoading(false); return }
     setLoading(true)
     Promise.all([getAllDriveExpenses(), getColleges()])
       .then(([exps, cols]) => { setAllExpenses(exps); setColleges(cols) })

@@ -12,6 +12,7 @@ import {
 import { pushCandidateToSchedulingApp, fetchInterviewFeedback } from '../../api/integration'
 import { STAGES, STAGE_COLORS, STAGE_LABELS } from '../../utils/stages'
 import { arrayUnion } from 'firebase/firestore'
+import { useAuth } from '../../contexts/AuthContext'
 
 const ROUNDS = [
   { key: 'nxtmock', label: 'NxtMock', shortlistStage: STAGES.AUDIT_ASSESSMENT_PASSED, pushedStage: STAGES.NXTMOCK_SHORTLISTED, doneStage: STAGES.NXTMOCK_COMPLETED, auditPendingStage: null },
@@ -20,6 +21,7 @@ const ROUNDS = [
 ]
 
 export default function InterviewsPage() {
+  const { isGuest } = useAuth()
   const [tab, setTab]               = useState('nxtmock')
   const [eligible, setEligible]     = useState([])
   const [pushed, setPushed]         = useState([])
@@ -32,6 +34,7 @@ export default function InterviewsPage() {
   const round = ROUNDS.find(r => r.key === tab)
 
   const load = async () => {
+    if (isGuest) { setLoading(false); return }
     setLoading(true)
     const [elig, pushRecords] = await Promise.all([
       getStudentsByStage(round.shortlistStage),

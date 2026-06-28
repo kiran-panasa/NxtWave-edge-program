@@ -12,7 +12,7 @@ import { arrayUnion } from 'firebase/firestore'
 const TABS = Object.entries(AUDIT_STAGES).map(([key, val]) => ({ key, ...val }))
 
 export default function AuditPage() {
-  const { profile } = useAuth()
+  const { profile, isGuest } = useAuth()
   const [tab, setTab]           = useState(TABS[0].key)
   const [students, setStudents] = useState([])
   const [loading, setLoading]   = useState(true)
@@ -24,6 +24,7 @@ export default function AuditPage() {
   const currentAudit = AUDIT_STAGES[tab]
 
   const load = () => {
+    if (isGuest) { setLoading(false); return }
     setLoading(true)
     getPendingAudits(currentAudit.pendingStage).then(setStudents).finally(() => setLoading(false))
   }

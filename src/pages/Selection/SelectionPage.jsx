@@ -6,12 +6,15 @@ import Spinner from '../../components/ui/Spinner'
 import { Link } from 'react-router-dom'
 import { getStudentsByStage } from '../../api/firestore'
 import { STAGES } from '../../utils/stages'
+import { useAuth } from '../../contexts/AuthContext'
 
 export default function SelectionPage() {
+  const { isGuest } = useAuth()
   const [students, setStudents] = useState([])
   const [loading, setLoading]   = useState(true)
 
   useEffect(() => {
+    if (isGuest) { setLoading(false); return }
     getStudentsByStage(STAGES.AUDIT_TR2_PASSED)
       .then(setStudents)
       .finally(() => setLoading(false))
