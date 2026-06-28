@@ -18,7 +18,12 @@ const OUTREACH_COLORS = {
   assessment_done:      'bg-green-100 text-green-700',
 }
 
-const EMPTY_FORM = { name: '', city: '', state: '', contactName: '', contactEmail: '', contactPhone: '', outreachStatus: 'contacted' }
+const EMPTY_FORM = { name: '', shortCode: '', city: '', state: '', contactName: '', contactEmail: '', contactPhone: '', outreachStatus: 'contacted' }
+
+// Auto-suggest: initials of each word, max 6 chars, uppercase
+// "JNTU Hyderabad" → "JNTUH", "Osmania University" → "OU"
+const suggestShortCode = (name) =>
+  name.trim().split(/\s+/).map(w => w[0] ?? '').join('').toUpperCase().slice(0, 6)
 
 const BULK_COLS = ['name', 'city', 'state', 'contactName', 'contactEmail', 'contactPhone', 'outreachStatus']
 
@@ -72,7 +77,7 @@ export default function CollegesPage() {
   const openAdd  = () => { setEditing(null); setForm(EMPTY_FORM); setModal(true) }
   const openEdit = (c) => {
     setEditing(c)
-    setForm({ name: c.name, city: c.city ?? '', state: c.state ?? '', contactName: c.contactName ?? '', contactEmail: c.contactEmail ?? '', contactPhone: c.contactPhone ?? '', outreachStatus: c.outreachStatus ?? 'contacted' })
+    setForm({ name: c.name, shortCode: c.shortCode ?? '', city: c.city ?? '', state: c.state ?? '', contactName: c.contactName ?? '', contactEmail: c.contactEmail ?? '', contactPhone: c.contactPhone ?? '', outreachStatus: c.outreachStatus ?? 'contacted' })
     setModal(true)
   }
 
@@ -222,7 +227,43 @@ export default function CollegesPage() {
       {/* ── Single add/edit modal ── */}
       <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Edit College' : 'Add College'}>
         <form onSubmit={handleSave} className="space-y-4">
-          <Input label="College Name *" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+          <Input
+            label="College Name *"
+            value={form.name}
+            onChange={e => {
+              const name = e.target.value
+              setForm(f => ({
+                ...f,
+                name,
+                // Auto-fill shortCode only if user hasn't manually typed one
+                shortCode: f.shortCode === suggestShortCode(f.name) || f.shortCode === ''
+                  ? suggestShortCode(name)
+                  : f.shortCode,
+              }))
+            }}
+            required
+          />
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">
+              Short Code <span className="text-gray-400 font-normal">(used in college ID)</span>
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 w-32 uppercase font-mono tracking-widest disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                value={form.shortCode}
+                onChange={e => setForm(f => ({ ...f, shortCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) }))}
+                placeholder="JNTUH"
+                maxLength={6}
+                disabled={!!(editing?.shortCode)}
+              />
+              {form.shortCode && (
+                <span className="text-xs text-gray-400">
+                  ID will look like: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-brand-700 font-semibold">{form.shortCode}-2627-001</code>
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-gray-400">3–6 uppercase letters. Once set, this never changes — it's part of every ID for this college.</p>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Input label="City" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
             <Input label="State" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} />

@@ -10,7 +10,6 @@ import {
   createInvite, getPendingUsers,
   getPermissions, setPermissions,
   getCustomRoles, saveCustomRoles,
-  getCollegeIdConfig, setCollegeIdConfig,
 } from '../../api/firestore'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../../firebase'
@@ -432,16 +431,10 @@ function PermissionsTab() {
 function GeneralTab() {
   const [guestEnabled, setGuestEnabled] = useState(false)
   const [loading, setLoading]           = useState(true)
-  const [idPrefix, setIdPrefix]         = useState('CLG')
-  const [idDigits, setIdDigits]         = useState(4)
-  const [idSaving, setIdSaving]         = useState(false)
-  const [idSaved,  setIdSaved]          = useState(false)
 
   useEffect(() => {
-    Promise.all([getAppConfig(), getCollegeIdConfig()]).then(([cfg, idCfg]) => {
+    getAppConfig().then(cfg => {
       setGuestEnabled(cfg.guestLoginEnabled ?? false)
-      setIdPrefix(idCfg.prefix)
-      setIdDigits(idCfg.digits)
       setLoading(false)
     })
   }, [])
@@ -452,56 +445,18 @@ function GeneralTab() {
     await setAppConfig({ guestLoginEnabled: next })
   }
 
-  const saveIdFormat = async () => {
-    setIdSaving(true)
-    await setCollegeIdConfig({ prefix: idPrefix.trim().toUpperCase() || 'CLG', digits: idDigits })
-    setIdSaving(false)
-    setIdSaved(true)
-    setTimeout(() => setIdSaved(false), 2000)
-  }
-
-  const preview = `${idPrefix.trim().toUpperCase() || 'CLG'}-${'1'.padStart(idDigits, '0')}`
-
   return (
     <div className="space-y-6">
-      {/* College ID Format */}
+      {/* College ID info */}
       <Card className="p-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-1">College ID Format</h2>
-        <p className="text-xs text-gray-500 mb-4">Auto-generated ID assigned to each college. Used to map students from BigQuery.</p>
-        {loading ? <Spinner size="sm" /> : (
-          <div className="space-y-4">
-            <div className="flex gap-4 items-end">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-600">Prefix</label>
-                <input
-                  className="px-3 py-2 text-sm border border-gray-300 rounded-lg w-28 focus:outline-none focus:ring-2 focus:ring-brand-500 uppercase"
-                  value={idPrefix}
-                  onChange={e => { setIdPrefix(e.target.value.toUpperCase()); setIdSaved(false) }}
-                  maxLength={10}
-                  placeholder="CLG"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-600">Digit count</label>
-                <select
-                  className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  value={idDigits}
-                  onChange={e => { setIdDigits(Number(e.target.value)); setIdSaved(false) }}
-                >
-                  {[3,4,5,6].map(n => <option key={n} value={n}>{n} digits</option>)}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-600">Preview</label>
-                <code className="px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg text-brand-700 font-semibold">{preview}</code>
-              </div>
-              <Button onClick={saveIdFormat} disabled={idSaving}>
-                {idSaving ? 'Saving…' : idSaved ? 'Saved!' : 'Save format'}
-              </Button>
-            </div>
-            <p className="text-xs text-gray-400">Note: changing the format only affects new colleges. Existing IDs are not renamed.</p>
-          </div>
-        )}
+        <p className="text-xs text-gray-500 mb-3">IDs are auto-generated when you add a college. Format: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-brand-700">SHORTCODE-AY-SEQ</code></p>
+        <div className="bg-gray-50 rounded-lg p-4 text-xs text-gray-600 space-y-1.5">
+          <p><strong className="text-gray-700">SHORTCODE</strong> — set per college when adding it (e.g. JNTUH, OU, NITW)</p>
+          <p><strong className="text-gray-700">AY</strong> — academic year the college was onboarded (e.g. 2627 = 2026-27)</p>
+          <p><strong className="text-gray-700">SEQ</strong> — sequential number per college per year (001, 002…)</p>
+          <p className="text-gray-400 pt-1">Example: <code className="bg-white border border-gray-200 px-1.5 py-0.5 rounded text-brand-700 font-semibold">JNTUH-2627-001</code></p>
+        </div>
       </Card>
 
       {/* Guest Access */}

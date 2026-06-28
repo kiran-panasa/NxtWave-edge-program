@@ -35,8 +35,14 @@ export const getCollege = (id) =>
   getDoc(doc(db, 'colleges', id)).then(d => d.exists() ? { id: d.id, ...d.data() } : null)
 
 export const createCollege = async (data) => {
-  const collegeId = await generateCollegeId()
-  return addDoc(collection(db, 'colleges'), { ...data, collegeId, ...tsNew() })
+  const code      = data.shortCode?.trim().toUpperCase()
+  const collegeId = code ? await generateCollegeId(code) : null
+  return addDoc(collection(db, 'colleges'), {
+    ...data,
+    shortCode: code ?? null,
+    ...(collegeId ? { collegeId } : {}),
+    ...tsNew(),
+  })
 }
 
 export const updateCollege = (id, data) =>
@@ -312,25 +318,25 @@ export const getPendingUsers = () =>
 
 // ─── College ID ───────────────────────────────────────────────────────────────
 
-export const getCollegeIdConfig = () =>
-  getDoc(doc(db, 'config', 'app')).then(d => {
-    const data = d.exists() ? d.data() : {}
-    return { prefix: data.collegeIdPrefix ?? 'CLG', digits: data.collegeIdDigits ?? 4 }
-  })
+function compactAY() {
+  const now = new Date()
+  const y   = now.getFullYear()
+  const start = now.getMonth() >= 5 ? y : y - 1
+  return `${String(start).slice(2)}${String(start + 1).slice(2)}`
+}
 
-export const setCollegeIdConfig = ({ prefix, digits }) =>
-  setDoc(doc(db, 'config', 'app'), { collegeIdPrefix: prefix, collegeIdDigits: digits }, { merge: true })
-
-export const generateCollegeId = async () => {
-  const cfg     = await getCollegeIdConfig()
-  const counter = doc(db, 'config', 'counters')
+export const generateCollegeId = async (shortCode) => {
+  const ay         = compactAY()
+  const counterKey = `${shortCode}_${ay}`
+  const counter    = doc(db, 'config', 'counters')
   let newCount
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(counter)
-    newCount   = (snap.exists() ? (snap.data().collegeCount ?? 0) : 0) + 1
-    tx.set(counter, { collegeCount: newCount }, { merge: true })
+    const data = snap.exists() ? snap.data() : {}
+    newCount   = (data[counterKey] ?? 0) + 1
+    tx.set(counter, { [counterKey]: newCount }, { merge: true })
   })
-  return `${cfg.prefix}-${String(newCount).padStart(cfg.digits, '0')}`
+  return `${shortCode}-${ay}-${String(newCount).padStart(3, '0')}`
 }
 
 // ─── Drives ───────────────────────────────────────────────────────────────────
