@@ -45,6 +45,12 @@ export function AuthProvider({ children }) {
     return unsub
   }, [])
 
+  const refreshRoles = async () => {
+    const [customRoles, perms] = await Promise.all([getCustomRoles(), getPermissions()])
+    setRoles(customRoles ?? INITIAL_ROLES)
+    setPermissions(perms ?? DEFAULT_PERMISSIONS)
+  }
+
   const login         = (email, password) => signInWithEmailAndPassword(auth, email, password)
   const signUp        = (email, password) => createUserWithEmailAndPassword(auth, email, password)
   const guestLogin    = ()                => signInAnonymously(auth)
@@ -69,7 +75,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, profile, permissions, roles, loading,
-      isGuest, canAccess, roleLabel,
+      isGuest, canAccess, roleLabel, refreshRoles,
       login, signUp, guestLogin, resetPassword, logout,
     }}>
       {children}

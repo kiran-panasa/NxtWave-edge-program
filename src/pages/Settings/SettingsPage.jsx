@@ -264,6 +264,7 @@ function UsersTab() {
 // ─── Permissions Tab ──────────────────────────────────────────────────────────
 
 function PermissionsTab() {
+  const { refreshRoles } = useAuth()
   const [roles, setRoles]     = useState(null)
   const [perms, setPerms]     = useState(null)
   const [loading, setLoading] = useState(true)
@@ -299,6 +300,7 @@ function PermissionsTab() {
   const handleSave = async () => {
     setSaving(true)
     await Promise.all([saveCustomRoles(roles), setPermissions(perms)])
+    await refreshRoles()
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
