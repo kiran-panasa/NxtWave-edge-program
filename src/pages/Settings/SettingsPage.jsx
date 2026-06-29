@@ -12,8 +12,9 @@ import {
   getCustomRoles, saveCustomRoles,
   getOutreachStatuses, saveOutreachStatuses,
 } from '../../api/firestore'
-import { createUserWithEmailAndPassword } from 'firebase/auth'
-import { auth } from '../../firebase'
+import { initializeApp, deleteApp } from 'firebase/app'
+import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth'
+import { auth, firebaseConfig } from '../../firebase'
 import { PAGES, INITIAL_ROLES, DEFAULT_PERMISSIONS, toRoleKey } from '../../utils/roles'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -96,8 +97,11 @@ function UsersTab() {
     e.preventDefault()
     setSaving(true)
     setError('')
+    // Use a secondary app so creating a user doesn't sign out the current admin
+    const secondaryApp  = initializeApp(firebaseConfig, `admin-create-${Date.now()}`)
+    const secondaryAuth = getAuth(secondaryApp)
     try {
-      const cred = await createUserWithEmailAndPassword(auth, form.email, form.password)
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, form.email, form.password)
       await createUser(cred.user.uid, { name: form.name, email: form.email, role: form.role, status: 'active' })
       await load()
       setModal(false)
@@ -106,6 +110,8 @@ function UsersTab() {
       setError(err.message)
     } finally {
       setSaving(false)
+      await secondaryAuth.signOut()
+      await deleteApp(secondaryApp)
     }
   }
 
