@@ -498,6 +498,47 @@ export default function CollegeDetail() {
           </div>
         )}
       </Modal>
+
+      {/* Deletion request modal */}
+      <Modal
+        open={deletionModal}
+        onClose={() => { setDeletionModal(false); setDeletionReason('') }}
+        title="Request College Deletion"
+      >
+        <div className="space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700 space-y-1">
+            <p className="font-semibold">This will soft-delete the following data:</p>
+            <ul className="list-disc list-inside space-y-0.5 mt-1">
+              <li>{students.length} student{students.length !== 1 ? 's' : ''}</li>
+              <li>{drives.length} drive{drives.length !== 1 ? 's' : ''}</li>
+              <li>₹{expensesTotal.toLocaleString('en-IN')} in expenses</li>
+            </ul>
+            <p className="mt-1">Records will be hidden from all views but not permanently removed.</p>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Reason for deletion *</label>
+            <textarea
+              className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+              rows={3}
+              value={deletionReason}
+              onChange={e => setDeletionReason(e.target.value)}
+              placeholder="Explain why this college should be removed…"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => { setDeletionModal(false); setDeletionReason('') }}>
+              Cancel
+            </Button>
+            <button
+              onClick={submitDeletionRequest}
+              disabled={!deletionReason.trim() || deletionBusy}
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {deletionBusy ? 'Submitting…' : 'Submit Request'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
@@ -656,46 +697,6 @@ function DrivesTab({ college, drives, onRefresh }) {
         )}
       </Modal>
 
-      {/* Deletion request modal */}
-      <Modal
-        open={deletionModal}
-        onClose={() => { setDeletionModal(false); setDeletionReason('') }}
-        title="Request College Deletion"
-      >
-        <div className="space-y-4">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700 space-y-1">
-            <p className="font-semibold">This will soft-delete the following data:</p>
-            <ul className="list-disc list-inside space-y-0.5 mt-1">
-              <li>{students.length} student{students.length !== 1 ? 's' : ''}</li>
-              <li>{drives.length} drive{drives.length !== 1 ? 's' : ''}</li>
-              <li>₹{expensesTotal.toLocaleString('en-IN')} in expenses</li>
-            </ul>
-            <p className="mt-1">Records will be hidden from all views but not permanently removed.</p>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Reason for deletion *</label>
-            <textarea
-              className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
-              rows={3}
-              value={deletionReason}
-              onChange={e => setDeletionReason(e.target.value)}
-              placeholder="Explain why this college should be removed…"
-            />
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => { setDeletionModal(false); setDeletionReason('') }}>
-              Cancel
-            </Button>
-            <button
-              onClick={submitDeletionRequest}
-              disabled={!deletionReason.trim() || deletionBusy}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {deletionBusy ? 'Submitting…' : 'Submit Request'}
-            </button>
-          </div>
-        </div>
-      </Modal>
     </div>
   )
 }
