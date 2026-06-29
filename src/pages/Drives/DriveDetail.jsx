@@ -120,6 +120,16 @@ export default function DriveDetail({ drive, onUpdate, onClose }) {
     onUpdate?.()
   })
 
+  const revertToConfirmed = () => act(async () => {
+    await updateDrive(drive.id, { status: 'college_confirmed' })
+    await addDriveHistory(drive.id, {
+      action: 'reverted',
+      by: profile?.name ?? 'Admin',
+      note: 'Completion reverted — drive date has not occurred yet.',
+    })
+    onUpdate?.()
+  })
+
   const saveInfra = () => act(async () => {
     const changes = Object.entries(infra)
       .filter(([k, v]) => v !== (drive.infra?.[k] ?? ''))
@@ -201,6 +211,13 @@ export default function DriveDetail({ drive, onUpdate, onClose }) {
           {/* Onboarding: confirm college */}
           {canOnboard && drive.status === 'approved' && (
             <Button size="sm" onClick={confirmCollege}>Mark College Confirmed</Button>
+          )}
+
+          {/* Admin: revert premature completion */}
+          {isAdmin && drive.status === 'completed' && !driveHappened && (
+            <Button size="sm" variant="secondary" onClick={revertToConfirmed}>
+              Revert to Confirmed
+            </Button>
           )}
 
           {/* Mark completed — only after the drive date */}
