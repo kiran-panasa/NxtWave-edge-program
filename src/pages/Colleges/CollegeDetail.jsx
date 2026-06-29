@@ -369,6 +369,8 @@ const DRIVE_STATUS_LABELS = {
 }
 
 function DrivesTab({ college, drives, onRefresh }) {
+  const { profile } = useAuth()
+  const canOnboard = ['admin', 'onboarding_team'].includes(profile?.role)
   const [modal, setModal]             = useState(null)   // null | 'form' | 'detail'
   const [selectedDrive, setSelectedDrive] = useState(null)
   const [freshDrive, setFreshDrive]   = useState(null)
@@ -403,11 +405,13 @@ function DrivesTab({ college, drives, onRefresh }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button size="sm" onClick={() => { setSelectedDrive(null); setModal('form') }}>
-          + New Drive Request
-        </Button>
-      </div>
+      {canOnboard && (
+        <div className="flex justify-end">
+          <Button size="sm" onClick={() => { setSelectedDrive(null); setModal('form') }}>
+            + New Drive Request
+          </Button>
+        </div>
+      )}
 
       {drives.length === 0 ? (
         <Card className="p-8 text-center text-gray-400">

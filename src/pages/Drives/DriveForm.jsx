@@ -42,9 +42,11 @@ export default function DriveForm({ college, drive, onSave, onCancel }) {
         ...form,
         timeSlot,
         expectedStudentCount: Number(form.expectedStudentCount) || 0,
-        collegeId:   college.id,
-        collegeName: college.name,
-        collegeCode: college.collegeId ?? '',
+        collegeId:    college.id,
+        collegeName:  college.name,
+        collegeCode:  college.collegeId ?? '',
+        createdByUid: profile?.uid ?? '',
+        createdByName: profile?.name ?? '',
         status,
       }
 

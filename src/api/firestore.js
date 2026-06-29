@@ -403,6 +403,15 @@ export const getAllDrivesForCalendar = () =>
   getDocs(query(collection(db, 'drives'), where('status', 'in', ['approved', 'college_confirmed', 'completed'])))
     .then(s => s.docs.map(toDrive))
 
+export const getAllDrives = () =>
+  getDocs(collection(db, 'drives'))
+    .then(s => s.docs.map(toDrive)
+      .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)))
+
+export const getCollegesByOnboarder = (uid) =>
+  getDocs(query(collection(db, 'colleges'), where('onboardedByUid', '==', uid)))
+    .then(s => s.docs.map(d => ({ id: d.id, ...d.data() })))
+
 // ─── Outreach Statuses ────────────────────────────────────────────────────────
 
 export const DEFAULT_OUTREACH_STATUSES = [

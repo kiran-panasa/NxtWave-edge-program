@@ -207,7 +207,7 @@ export default function DriveDetail({ drive, onUpdate, onClose }) {
           )}
 
           {/* Cancel */}
-          {!['completed', 'cancelled'].includes(drive.status) && (
+          {canOnboard && !['completed', 'cancelled'].includes(drive.status) && (
             cancelConfirm ? (
               <div className="flex gap-2 items-center">
                 <span className="text-xs text-red-600">Confirm cancel?</span>
