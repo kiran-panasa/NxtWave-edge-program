@@ -212,6 +212,15 @@ export default function CollegeDetail() {
       )}
 
       {tab === 'students' && (
+        <div className="space-y-3">
+          <div className="flex justify-end">
+            <Link
+              to={`/import?college=${college.id}`}
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors"
+            >
+              ↑ Import Students
+            </Link>
+          </div>
         <Card>
           <table className="w-full text-sm">
             <thead>
@@ -239,6 +248,7 @@ export default function CollegeDetail() {
             </tbody>
           </table>
         </Card>
+        </div>
       )}
 
       {tab === 'assessments' && (

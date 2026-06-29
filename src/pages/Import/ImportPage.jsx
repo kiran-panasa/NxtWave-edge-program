@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
+import { useSearchParams } from 'react-router-dom'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
-import { useEffect } from 'react'
 import { getColleges, getDrivesByCollege, batchCreateStudents, createAssessmentImport, updateCollege } from '../../api/firestore'
 import { STAGES } from '../../utils/stages'
 
@@ -31,6 +31,9 @@ function downloadSample() {
 }
 
 export default function ImportPage() {
+  const [searchParams]       = useSearchParams()
+  const preselectedCollege   = searchParams.get('college') ?? ''
+
   const fileRef              = useRef(null)
   const [colleges, setColleges] = useState([])
   const [collegeId, setCollegeId] = useState('')
@@ -42,7 +45,15 @@ export default function ImportPage() {
   const [importing, setImporting] = useState(false)
   const [done, setDone]      = useState(null)
 
-  useEffect(() => { getColleges().then(setColleges) }, [])
+  useEffect(() => {
+    getColleges().then(list => {
+      setColleges(list)
+      if (preselectedCollege && list.find(c => c.id === preselectedCollege)) {
+        setCollegeId(preselectedCollege)
+        getDrivesByCollege(preselectedCollege).then(setDrives)
+      }
+    })
+  }, [preselectedCollege])
 
   const handleCollegeChange = (id) => {
     setCollegeId(id)
