@@ -58,18 +58,18 @@ export default function CollegeDetail() {
     getDrivesByCollege(id).then(setDrives)
 
   useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       getCollege(id),
       getStudentsByCollege(id),
       getAssessmentsByCollege(id),
       getDriveExpensesByCollege(id),
       getDrivesByCollege(id),
     ]).then(([c, s, a, e, d]) => {
-      setCollege(c)
-      setStudents(s)
-      setAssessments(a)
-      setExpenses(e)
-      setDrives(d)
+      setCollege(c.status === 'fulfilled' ? c.value : null)
+      setStudents(s.status === 'fulfilled' ? s.value : [])
+      setAssessments(a.status === 'fulfilled' ? a.value : [])
+      setExpenses(e.status === 'fulfilled' ? e.value : [])
+      setDrives(d.status === 'fulfilled' ? d.value : [])
     }).finally(() => setLoading(false))
   }, [id])
 
