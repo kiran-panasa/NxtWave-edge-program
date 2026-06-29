@@ -31,6 +31,13 @@ function ProtectedRoute({ children, page }) {
 
   if (user.isAnonymous) return <Layout>{children}</Layout>
 
+  // Profile doc not yet written (race condition right after signup)
+  if (!profile) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <Spinner size="lg" />
+    </div>
+  )
+
   if (profile?.status === 'pending') return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 w-full max-w-sm text-center space-y-4">

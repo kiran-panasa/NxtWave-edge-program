@@ -25,14 +25,20 @@ export function AuthProvider({ children }) {
       if (firebaseUser) {
         setUser(firebaseUser)
         if (!firebaseUser.isAnonymous) {
-          const [p, perms, customRoles] = await Promise.all([
-            getUser(firebaseUser.uid),
+          const [perms, customRoles] = await Promise.all([
             getPermissions(),
             getCustomRoles(),
           ])
-          setProfile(p)
           setPermissions(perms ?? DEFAULT_PERMISSIONS)
           setRoles(customRoles ?? INITIAL_ROLES)
+
+          // Retry once — Firestore doc may not exist yet right after signup
+          let p = await getUser(firebaseUser.uid)
+          if (!p) {
+            await new Promise(r => setTimeout(r, 1500))
+            p = await getUser(firebaseUser.uid)
+          }
+          setProfile(p)
         }
       } else {
         setUser(null)
