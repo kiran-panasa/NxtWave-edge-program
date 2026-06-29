@@ -4,7 +4,14 @@ import { useSearchParams } from 'react-router-dom'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
-import { getColleges, getDrivesByCollege, batchCreateStudents, createAssessmentImport, updateCollege } from '../../api/firestore'
+import {
+  getColleges,
+  getDrivesByCollege,
+  batchCreateStudents,
+  batchUpsertAssessmentStudents,
+  createAssessmentImport,
+  updateCollege,
+} from '../../api/firestore'
 import { STAGES } from '../../utils/stages'
 
 const DRIVE_STATUS_LABELS = {
@@ -16,34 +23,72 @@ const DRIVE_STATUS_LABELS = {
   completed:         'Completed',
 }
 
-const REQUIRED_COLS = ['name', 'email']
-const EXPECTED_COLS = ['name', 'email', 'phone', 'uid']
+const TYPE_CONFIG = {
+  registration: {
+    label:       'Registrations',
+    description: 'Students registered for the assessment — imported before the drive to invite them for the test.',
+    cols:        ['name', 'email', 'phone', 'uid'],
+    requiredCols:['name', 'email'],
+    stage:       STAGES.REGISTERED,
+    outreach:    'assessment_scheduled',
+    sampleRows: [
+      { name: 'Ravi Kumar',   email: 'ravi@example.com',  phone: '9876543210', uid: 'ROLL001' },
+      { name: 'Priya Sharma', email: 'priya@example.com', phone: '9876543211', uid: 'ROLL002' },
+    ],
+    fileName:    'edge_registrations_sample.xlsx',
+  },
+  assessment: {
+    label:       'Assessment Results',
+    description: 'Scores after the assessment is completed — updates existing students by email and creates new records for unmatched entries.',
+    cols:        ['name', 'email', 'phone', 'uid', 'score'],
+    requiredCols:['name', 'email'],
+    stage:       STAGES.ASSESSMENT_IMPORTED,
+    outreach:    'assessment_done',
+    sampleRows: [
+      { name: 'Ravi Kumar',   email: 'ravi@example.com',  phone: '9876543210', uid: 'ROLL001', score: 85 },
+      { name: 'Priya Sharma', email: 'priya@example.com', phone: '9876543211', uid: 'ROLL002', score: 72 },
+    ],
+    fileName:    'edge_assessment_results_sample.xlsx',
+  },
+}
 
-function downloadSample() {
-  const ws = XLSX.utils.json_to_sheet([
-    { name: 'Ravi Kumar', email: 'ravi@example.com', phone: '9876543210', uid: 'ROLL001' },
-    { name: 'Priya Sharma', email: 'priya@example.com', phone: '9876543211', uid: 'ROLL002' },
-  ])
-  ws['!cols'] = EXPECTED_COLS.map(() => ({ wch: 20 }))
+function downloadSample(type) {
+  const cfg = TYPE_CONFIG[type]
+  const ws  = XLSX.utils.json_to_sheet(cfg.sampleRows)
+  ws['!cols'] = cfg.cols.map(() => ({ wch: 20 }))
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Students')
-  XLSX.writeFile(wb, 'edge_program_sample.xlsx')
+  XLSX.writeFile(wb, cfg.fileName)
 }
 
 export default function ImportPage() {
-  const [searchParams]       = useSearchParams()
-  const preselectedCollege   = searchParams.get('college') ?? ''
+  const [searchParams]   = useSearchParams()
+  const preselectedCollege = searchParams.get('college') ?? ''
+  const preselectedType    = searchParams.get('type') === 'assessment' ? 'assessment' : 'registration'
 
   const fileRef              = useRef(null)
-  const [colleges, setColleges] = useState([])
-  const [collegeId, setCollegeId] = useState('')
-  const [drives, setDrives]  = useState([])
-  const [driveId, setDriveId] = useState('')
-  const [rows, setRows]      = useState([])
-  const [fileName, setFileName] = useState('')
-  const [errors, setErrors]  = useState([])
-  const [importing, setImporting] = useState(false)
-  const [done, setDone]      = useState(null)
+  const [importType, setImportType] = useState(preselectedType)
+  const [colleges, setColleges]     = useState([])
+  const [collegeId, setCollegeId]   = useState('')
+  const [drives, setDrives]         = useState([])
+  const [driveId, setDriveId]       = useState('')
+  const [rows, setRows]             = useState([])
+  const [fileName, setFileName]     = useState('')
+  const [errors, setErrors]         = useState([])
+  const [importing, setImporting]   = useState(false)
+  const [done, setDone]             = useState(null)   // { count, created?, updated? }
+
+  const cfg = TYPE_CONFIG[importType]
+
+  // Switch type → reset file state (not college/drive selection)
+  const switchType = (t) => {
+    setImportType(t)
+    setRows([])
+    setFileName('')
+    setErrors([])
+    setDone(null)
+    if (fileRef.current) fileRef.current.value = ''
+  }
 
   useEffect(() => {
     getColleges().then(list => {
@@ -59,6 +104,7 @@ export default function ImportPage() {
     setCollegeId(id)
     setDriveId('')
     setDrives([])
+    setDone(null)
     if (id) getDrivesByCollege(id).then(setDrives)
   }
 
@@ -77,7 +123,7 @@ export default function ImportPage() {
 
       const errs = []
       data.forEach((row, i) => {
-        REQUIRED_COLS.forEach(col => {
+        cfg.requiredCols.forEach(col => {
           if (!row[col]) errs.push(`Row ${i + 2}: missing "${col}"`)
         })
       })
@@ -92,28 +138,54 @@ export default function ImportPage() {
     const college     = colleges.find(c => c.id === collegeId)
     const selectedDrv = drives.find(d => d.id === driveId)
     setImporting(true)
+
     try {
-      const students = rows.map(r => ({
-        name:         String(r.name).trim(),
-        email:        String(r.email).trim().toLowerCase(),
-        phone:        String(r.phone ?? '').trim(),
-        uid:          String(r.uid  ?? '').trim(),
-        collegeId,
-        collegeName:  college?.name ?? '',
-        driveId:      driveId || null,
-        driveDate:    selectedDrv?.proposedDate ?? null,
-        currentStage: STAGES.ASSESSMENT_IMPORTED,
-        stageHistory: [{ stage: STAGES.ASSESSMENT_IMPORTED, at: new Date().toISOString() }],
-      }))
+      if (importType === 'registration') {
+        const students = rows.map(r => ({
+          name:         String(r.name  ?? '').trim(),
+          email:        String(r.email ?? '').trim().toLowerCase(),
+          phone:        String(r.phone ?? '').trim(),
+          uid:          String(r.uid   ?? '').trim(),
+          collegeId,
+          collegeName:  college?.name ?? '',
+          driveId:      driveId || null,
+          driveDate:    selectedDrv?.proposedDate ?? null,
+          currentStage: STAGES.REGISTERED,
+          stageHistory: [{ stage: STAGES.REGISTERED, at: new Date().toISOString() }],
+        }))
+        await batchCreateStudents(students)
+        await createAssessmentImport({
+          collegeId,
+          driveId:      driveId || null,
+          fileName,
+          studentCount: students.length,
+          type:         'registration',
+        })
+        await updateCollege(collegeId, { outreachStatus: 'assessment_scheduled' })
+        setDone({ count: students.length })
 
-      await batchCreateStudents(students)
-      await createAssessmentImport({ collegeId, driveId: driveId || null, fileName, studentCount: students.length })
-      await updateCollege(collegeId, { outreachStatus: 'assessment_done' })
+      } else {
+        const result = await batchUpsertAssessmentStudents(rows, {
+          collegeId,
+          collegeName:  college?.name ?? '',
+          driveId:      driveId || null,
+          driveDate:    selectedDrv?.proposedDate ?? null,
+        })
+        await createAssessmentImport({
+          collegeId,
+          driveId:      driveId || null,
+          fileName,
+          studentCount: result.created + result.updated,
+          type:         'assessment',
+        })
+        await updateCollege(collegeId, { outreachStatus: 'assessment_done' })
+        setDone({ count: result.created + result.updated, created: result.created, updated: result.updated })
+      }
 
-      setDone(students.length)
       setRows([])
       setFileName('')
       if (fileRef.current) fileRef.current.value = ''
+
     } finally {
       setImporting(false)
     }
@@ -123,13 +195,35 @@ export default function ImportPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Import Assessment Results</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Upload XLSX from the external assessment tool</p>
+          <h1 className="text-xl font-semibold text-gray-900">Import Students</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Upload XLSX to add registrations or assessment results</p>
         </div>
-        <Button variant="secondary" onClick={downloadSample}>Download Sample</Button>
+        <Button variant="secondary" onClick={() => downloadSample(importType)}>
+          Download Sample
+        </Button>
       </div>
 
+      {/* Type toggle */}
+      <div className="flex gap-2">
+        {Object.entries(TYPE_CONFIG).map(([key, c]) => (
+          <button
+            key={key}
+            onClick={() => switchType(key)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+              importType === key
+                ? 'bg-brand-600 text-white border-brand-600'
+                : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+            }`}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      <p className="text-sm text-gray-500 -mt-1">{cfg.description}</p>
+
       <Card className="p-6 space-y-5">
+        {/* College selector */}
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-gray-700">Select College *</label>
           <select
@@ -138,31 +232,36 @@ export default function ImportPage() {
             onChange={e => handleCollegeChange(e.target.value)}
           >
             <option value="">Choose college…</option>
-            {colleges.map(c => <option key={c.id} value={c.id}>{c.name}{c.collegeId ? ` (${c.collegeId})` : ''}</option>)}
+            {colleges.map(c => (
+              <option key={c.id} value={c.id}>{c.name}{c.collegeId ? ` (${c.collegeId})` : ''}</option>
+            ))}
           </select>
 
-        {collegeId && (
-          <div className="flex flex-col gap-1 mt-3">
-            <label className="text-sm font-medium text-gray-700">Link to Drive <span className="text-gray-400 font-normal">(optional)</span></label>
-            <select
-              className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 max-w-sm"
-              value={driveId}
-              onChange={e => setDriveId(e.target.value)}
-            >
-              <option value="">No drive — standalone import</option>
-              {drives.map(d => (
-                <option key={d.id} value={d.id}>
-                  {d.proposedDate} · {d.academicYear} · {DRIVE_STATUS_LABELS[d.status] ?? d.status}
-                </option>
-              ))}
-            </select>
-            {drives.length === 0 && (
-              <p className="text-xs text-gray-400">No drives found for this college. Create one from the college page first.</p>
-            )}
-          </div>
-        )}
+          {collegeId && (
+            <div className="flex flex-col gap-1 mt-3">
+              <label className="text-sm font-medium text-gray-700">
+                Link to Drive <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <select
+                className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 max-w-sm"
+                value={driveId}
+                onChange={e => setDriveId(e.target.value)}
+              >
+                <option value="">No drive — standalone import</option>
+                {drives.map(d => (
+                  <option key={d.id} value={d.id}>
+                    {d.proposedDate} · {d.academicYear} · {DRIVE_STATUS_LABELS[d.status] ?? d.status}
+                  </option>
+                ))}
+              </select>
+              {drives.length === 0 && (
+                <p className="text-xs text-gray-400">No drives found for this college.</p>
+              )}
+            </div>
+          )}
         </div>
 
+        {/* File upload */}
         <div>
           <label className="text-sm font-medium text-gray-700 block mb-1">Upload XLSX *</label>
           <div
@@ -180,13 +279,17 @@ export default function ImportPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
                 <p className="text-sm text-gray-500">Click to upload XLSX file</p>
-                <p className="text-xs text-gray-400 mt-1">Required columns: name, email · Optional: phone, uid</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Required: name, email
+                  {importType === 'registration' ? ' · Optional: phone, uid' : ' · Optional: phone, uid · Score column for results'}
+                </p>
               </div>
             )}
           </div>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
         </div>
 
+        {/* Validation errors */}
         {errors.length > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-sm font-medium text-red-700 mb-2">Validation errors ({errors.length})</p>
@@ -196,24 +299,34 @@ export default function ImportPage() {
           </div>
         )}
 
+        {/* Preview */}
         {rows.length > 0 && errors.length === 0 && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <p className="text-sm text-green-700"><strong>{rows.length}</strong> students ready to import</p>
-            <div className="mt-3 overflow-x-auto">
+            <p className="text-sm text-green-700 mb-3">
+              <strong>{rows.length}</strong> rows ready to import
+              {importType === 'assessment' && (
+                <span className="text-green-600 font-normal"> — existing students will be updated by email; new ones will be created</span>
+              )}
+            </p>
+            <div className="overflow-x-auto">
               <table className="text-xs w-full">
                 <thead>
                   <tr className="text-left text-green-600">
-                    {EXPECTED_COLS.map(c => <th key={c} className="pr-4 py-1 font-medium capitalize">{c}</th>)}
+                    {cfg.cols.map(c => <th key={c} className="pr-4 py-1 font-medium capitalize">{c}</th>)}
                   </tr>
                 </thead>
                 <tbody>
                   {rows.slice(0, 5).map((r, i) => (
                     <tr key={i} className="text-green-700">
-                      {EXPECTED_COLS.map(c => <td key={c} className="pr-4 py-1">{r[c] || '—'}</td>)}
+                      {cfg.cols.map(c => <td key={c} className="pr-4 py-1">{r[c] !== undefined && r[c] !== '' ? r[c] : '—'}</td>)}
                     </tr>
                   ))}
                   {rows.length > 5 && (
-                    <tr><td colSpan={4} className="text-green-500 pt-1">…and {rows.length - 5} more rows</td></tr>
+                    <tr>
+                      <td colSpan={cfg.cols.length} className="text-green-500 pt-1">
+                        …and {rows.length - 5} more rows
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
@@ -221,9 +334,20 @@ export default function ImportPage() {
           </div>
         )}
 
+        {/* Success */}
         {done !== null && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-blue-700">Successfully imported <strong>{done}</strong> students.</p>
+            {importType === 'registration' ? (
+              <p className="text-sm text-blue-700">
+                Successfully imported <strong>{done.count}</strong> registrations.
+              </p>
+            ) : (
+              <p className="text-sm text-blue-700">
+                Successfully processed <strong>{done.count}</strong> assessment results
+                {done.updated > 0 && <> — <strong>{done.updated}</strong> updated</>}
+                {done.created > 0 && <>, <strong>{done.created}</strong> newly created</>}.
+              </p>
+            )}
           </div>
         )}
 
@@ -232,7 +356,9 @@ export default function ImportPage() {
             onClick={handleImport}
             disabled={!collegeId || rows.length === 0 || errors.length > 0 || importing}
           >
-            {importing ? <><Spinner size="sm" /><span>Importing…</span></> : `Import ${rows.length > 0 ? rows.length : ''} Students`}
+            {importing
+              ? <><Spinner size="sm" /><span>Importing…</span></>
+              : `Import ${rows.length > 0 ? rows.length + ' ' : ''}${cfg.label}`}
           </Button>
         </div>
       </Card>

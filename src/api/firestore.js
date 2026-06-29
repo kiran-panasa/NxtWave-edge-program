@@ -221,6 +221,63 @@ export const batchCreateStudents = async (students) => {
   }
 }
 
+// Assessment results import: update existing students by email, create new ones
+export const batchUpsertAssessmentStudents = async (rows, { collegeId, collegeName, driveId, driveDate }) => {
+  const existing = await getStudentsByCollege(collegeId)
+  const byEmail  = {}
+  existing.forEach(s => { byEmail[s.email?.toLowerCase() ?? ''] = s })
+
+  const now      = new Date().toISOString()
+  const toCreate = []
+  const toUpdate = []
+
+  rows.forEach(r => {
+    const email = String(r.email || '').trim().toLowerCase()
+    const score = (r.score !== undefined && r.score !== '') ? Number(r.score) : null
+    const match = byEmail[email]
+
+    if (match) {
+      toUpdate.push({
+        id: match.id,
+        data: {
+          currentStage:   'assessment_imported',
+          assessmentScore: score,
+          driveId:         driveId || match.driveId || null,
+          driveDate:       driveDate || match.driveDate || null,
+          stageHistory:    arrayUnion({ stage: 'assessment_imported', at: now }),
+        },
+      })
+    } else {
+      toCreate.push({
+        name:            String(r.name || '').trim(),
+        email,
+        phone:           String(r.phone || '').trim(),
+        uid:             String(r.uid   || '').trim(),
+        assessmentScore: score,
+        collegeId,
+        collegeName,
+        driveId:         driveId || null,
+        driveDate:       driveDate || null,
+        currentStage:    'assessment_imported',
+        stageHistory:    [{ stage: 'assessment_imported', at: now }],
+      })
+    }
+  })
+
+  for (let i = 0; i < toCreate.length; i += 499) {
+    const batch = writeBatch(db)
+    toCreate.slice(i, i + 499).forEach(s => batch.set(doc(collection(db, 'students')), { ...s, ...tsNew() }))
+    await batch.commit()
+  }
+  for (let i = 0; i < toUpdate.length; i += 499) {
+    const batch = writeBatch(db)
+    toUpdate.slice(i, i + 499).forEach(({ id, data }) => batch.update(doc(db, 'students', id), { ...data, ...ts() }))
+    await batch.commit()
+  }
+
+  return { created: toCreate.length, updated: toUpdate.length }
+}
+
 export const updateStudent = (id, data) =>
   updateDoc(doc(db, 'students', id), { ...data, ...ts() })
 

@@ -16,6 +16,7 @@ import SettingsPage from './pages/Settings/SettingsPage'
 import ExpensesPage from './pages/Expenses/ExpensesPage'
 import CalendarPage from './pages/Calendar/CalendarPage'
 import AboutPage from './pages/About/AboutPage'
+import AssessmentPage from './pages/Assessment/AssessmentPage'
 import Spinner from './components/ui/Spinner'
 
 function ProtectedRoute({ children, page }) {
@@ -105,6 +106,7 @@ function AppRoutes() {
       <Route path="/selection"   element={<ProtectedRoute page="selection"><SelectionPage /></ProtectedRoute>} />
       <Route path="/expenses"    element={<ProtectedRoute page="expenses"><ExpensesPage /></ProtectedRoute>} />
       <Route path="/calendar"    element={<ProtectedRoute page="calendar"><CalendarPage /></ProtectedRoute>} />
+      <Route path="/assessment"  element={<ProtectedRoute page="assessment"><AssessmentPage /></ProtectedRoute>} />
       <Route path="/settings"    element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
       <Route path="/about"       element={<ProtectedRoute><AboutPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />

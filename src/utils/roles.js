@@ -8,7 +8,8 @@ export const PAGES = [
   { key: 'interviews', label: 'Interviews' },
   { key: 'selection',  label: 'Selection' },
   { key: 'expenses',   label: 'Expenses' },
-  { key: 'calendar',   label: 'Calendar' },
+  { key: 'calendar',    label: 'Calendar' },
+  { key: 'assessment',  label: 'Assessment' },
 ]
 
 // Seeded on first use if no roles exist in Firestore

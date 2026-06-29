@@ -345,12 +345,18 @@ export default function CollegeDetail() {
 
       {tab === 'students' && (
         <div className="space-y-3">
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
             <Link
-              to={`/import?college=${college.id}`}
+              to={`/import?college=${college.id}&type=registration`}
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-brand-300 text-brand-700 hover:bg-brand-50 transition-colors"
+            >
+              ↑ Import Registrations
+            </Link>
+            <Link
+              to={`/import?college=${college.id}&type=assessment`}
               className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors"
             >
-              ↑ Import Students
+              ↑ Import Results
             </Link>
           </div>
         <Card>
@@ -389,6 +395,7 @@ export default function CollegeDetail() {
             <thead>
               <tr className="border-b border-gray-100 text-left">
                 <th className="px-4 py-3 font-medium text-gray-500">Import Date</th>
+                <th className="px-4 py-3 font-medium text-gray-500">Type</th>
                 <th className="px-4 py-3 font-medium text-gray-500">File</th>
                 <th className="px-4 py-3 font-medium text-gray-500">Students</th>
               </tr>
@@ -397,12 +404,19 @@ export default function CollegeDetail() {
               {assessments.map(a => (
                 <tr key={a.id} className="border-b border-gray-50 hover:bg-gray-50">
                   <td className="px-4 py-3 text-gray-600">{a.createdAt?.toDate?.().toLocaleDateString() ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      a.type === 'assessment' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                    }`}>
+                      {a.type === 'assessment' ? 'Assessment Results' : 'Registrations'}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-gray-600">{a.fileName ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600">{a.studentCount ?? '—'}</td>
                 </tr>
               ))}
               {assessments.length === 0 && (
-                <tr><td colSpan={3} className="px-4 py-8 text-center text-gray-400">No assessments imported yet</td></tr>
+                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">No imports yet</td></tr>
               )}
             </tbody>
           </table>
