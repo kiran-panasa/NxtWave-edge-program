@@ -110,8 +110,8 @@ export const getStudentsPage = ({ collegeId, stage, search, after } = {}) => {
 }
 
 export const getStudentsByCollege = (collegeId) =>
-  getDocs(query(collection(db, 'students'), where('collegeId', '==', collegeId), orderBy('name'))).then(s =>
-    s.docs.map(d => ({ id: d.id, ...d.data() }))
+  getDocs(query(collection(db, 'students'), where('collegeId', '==', collegeId))).then(s =>
+    s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
   )
 
 export const getStudentsByStage = (stage) =>
@@ -191,21 +191,24 @@ export const getStageCount = async (stage) => {
 
 export const getAuditQueue = (auditStage) =>
   getDocs(
-    query(collection(db, 'audits'), where('auditStage', '==', auditStage), where('verdict', '==', null), orderBy('createdAt'))
-  ).then(s => s.docs.map(d => ({ id: d.id, ...d.data() })))
+    query(collection(db, 'audits'), where('auditStage', '==', auditStage), where('verdict', '==', null))
+  ).then(s => s.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0)))
 
 export const getPendingAudits = (pendingStage) =>
   getDocs(
-    query(collection(db, 'students'), where('currentStage', '==', pendingStage), orderBy('name'))
-  ).then(s => s.docs.map(d => ({ id: d.id, ...d.data() })))
+    query(collection(db, 'students'), where('currentStage', '==', pendingStage))
+  ).then(s => s.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')))
 
 export const createAuditRecord = (data) =>
   addDoc(collection(db, 'audits'), { ...data, ...tsNew() })
 
 export const getAuditsForStudent = (studentId) =>
   getDocs(
-    query(collection(db, 'audits'), where('studentId', '==', studentId), orderBy('createdAt'))
-  ).then(s => s.docs.map(d => ({ id: d.id, ...d.data() })))
+    query(collection(db, 'audits'), where('studentId', '==', studentId))
+  ).then(s => s.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0)))
 
 // ─── Interviews ───────────────────────────────────────────────────────────────
 
@@ -225,8 +228,9 @@ export const getInterviewRecord = (id) =>
 
 export const getInterviewsByType = (type) =>
   getDocs(
-    query(collection(db, 'interviews'), where('type', '==', type), orderBy('createdAt', 'desc'))
-  ).then(s => s.docs.map(d => ({ id: d.id, ...d.data() })))
+    query(collection(db, 'interviews'), where('type', '==', type))
+  ).then(s => s.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)))
 
 // ─── Assessments ─────────────────────────────────────────────────────────────
 
@@ -235,8 +239,9 @@ export const createAssessmentImport = (data) =>
 
 export const getAssessmentsByCollege = (collegeId) =>
   getDocs(
-    query(collection(db, 'assessments'), where('collegeId', '==', collegeId), orderBy('createdAt', 'desc'))
-  ).then(s => s.docs.map(d => ({ id: d.id, ...d.data() })))
+    query(collection(db, 'assessments'), where('collegeId', '==', collegeId))
+  ).then(s => s.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)))
 
 // ─── Drive Expenses ───────────────────────────────────────────────────────────
 
@@ -258,13 +263,15 @@ export const getDriveExpense = (id) =>
 
 export const getDriveExpensesByCollege = (collegeId) =>
   getDocs(
-    query(collection(db, 'driveExpenses'), where('collegeId', '==', collegeId), orderBy('driveDate', 'desc'))
-  ).then(s => s.docs.map(toExpense))
+    query(collection(db, 'driveExpenses'), where('collegeId', '==', collegeId))
+  ).then(s => s.docs.map(toExpense)
+    .sort((a, b) => (b.driveDate ?? '').localeCompare(a.driveDate ?? '')))
 
 export const getAllDriveExpenses = ({ status } = {}) => {
   let q = query(collection(db, 'driveExpenses'), orderBy('createdAt', 'desc'))
-  if (status) q = query(collection(db, 'driveExpenses'), where('status', '==', status), orderBy('createdAt', 'desc'))
-  return getDocs(q).then(s => s.docs.map(toExpense))
+  if (status) q = query(collection(db, 'driveExpenses'), where('status', '==', status))
+  return getDocs(q).then(s => s.docs.map(toExpense)
+    .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)))
 }
 
 export const updateDriveExpense = (id, data) =>
@@ -370,8 +377,9 @@ export const getDrive = (id) =>
   getDoc(doc(db, 'drives', id)).then(d => d.exists() ? toDrive(d) : null)
 
 export const getDrivesByCollege = (collegeId) =>
-  getDocs(query(collection(db, 'drives'), where('collegeId', '==', collegeId), orderBy('createdAt', 'desc')))
-    .then(s => s.docs.map(toDrive))
+  getDocs(query(collection(db, 'drives'), where('collegeId', '==', collegeId)))
+    .then(s => s.docs.map(toDrive)
+      .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)))
 
 export const updateDrive = (id, data) =>
   updateDoc(doc(db, 'drives', id), { ...data, ...ts() })
@@ -387,8 +395,9 @@ export const updateDriveInfra = (id, infra, changeEntry) =>
   })
 
 export const getAllDrivesPendingApproval = () =>
-  getDocs(query(collection(db, 'drives'), where('status', '==', 'pending_approval'), orderBy('proposedDate')))
-    .then(s => s.docs.map(toDrive))
+  getDocs(query(collection(db, 'drives'), where('status', '==', 'pending_approval')))
+    .then(s => s.docs.map(toDrive)
+      .sort((a, b) => (a.proposedDate ?? '').localeCompare(b.proposedDate ?? '')))
 
 export const getAllDrivesForCalendar = () =>
   getDocs(query(collection(db, 'drives'), where('status', 'in', ['approved', 'college_confirmed', 'completed'])))

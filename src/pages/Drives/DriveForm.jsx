@@ -14,12 +14,15 @@ export default function DriveForm({ college, drive, onSave, onCancel }) {
   const { profile } = useAuth()
   const isEdit = !!drive
 
+  const parseTime = (slot, idx) => slot?.split(' – ')?.[idx] ?? ''
+
   const [form, setForm] = useState({
-    academicYear:        drive?.academicYear       ?? currentAcademicYear(),
-    proposedDate:        drive?.proposedDate       ?? '',
-    timeSlot:            drive?.timeSlot           ?? '',
+    academicYear:         drive?.academicYear        ?? currentAcademicYear(),
+    proposedDate:         drive?.proposedDate        ?? '',
+    timeStart:            drive?.timeStart           ?? parseTime(drive?.timeSlot, 0),
+    timeEnd:              drive?.timeEnd             ?? parseTime(drive?.timeSlot, 1),
     expectedStudentCount: drive?.expectedStudentCount ?? '',
-    notes:               drive?.notes              ?? '',
+    notes:                drive?.notes               ?? '',
   })
   const [saving, setSaving]     = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -32,8 +35,12 @@ export default function DriveForm({ college, drive, onSave, onCancel }) {
     else          setSaving(true)
 
     try {
+      const timeSlot = form.timeStart && form.timeEnd
+        ? `${form.timeStart} – ${form.timeEnd}`
+        : form.timeStart || ''
       const payload = {
         ...form,
+        timeSlot,
         expectedStudentCount: Number(form.expectedStudentCount) || 0,
         collegeId:   college.id,
         collegeName: college.name,
@@ -87,13 +94,25 @@ export default function DriveForm({ college, drive, onSave, onCancel }) {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Input
-          label="Time Slot *"
-          value={form.timeSlot}
-          onChange={e => set('timeSlot', e.target.value)}
-          placeholder="9:00 AM – 5:00 PM"
-        />
+      <div className="grid grid-cols-3 gap-4">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Start Time *</label>
+          <input
+            type="time"
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+            value={form.timeStart}
+            onChange={e => set('timeStart', e.target.value)}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">End Time *</label>
+          <input
+            type="time"
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+            value={form.timeEnd}
+            onChange={e => set('timeEnd', e.target.value)}
+          />
+        </div>
         <Input
           label="Expected Student Count *"
           type="number"
@@ -121,14 +140,14 @@ export default function DriveForm({ college, drive, onSave, onCancel }) {
           variant="secondary"
           type="button"
           onClick={() => save('draft')}
-          disabled={saving || submitting || !form.proposedDate || !form.timeSlot}
+          disabled={saving || submitting || !form.proposedDate || !form.timeStart}
         >
           {saving ? 'Saving…' : 'Save as Draft'}
         </Button>
         <Button
           type="button"
           onClick={() => save('pending_approval')}
-          disabled={saving || submitting || !form.proposedDate || !form.timeSlot || !form.expectedStudentCount}
+          disabled={saving || submitting || !form.proposedDate || !form.timeStart || !form.expectedStudentCount}
         >
           {submitting ? 'Submitting…' : 'Submit for Approval'}
         </Button>
