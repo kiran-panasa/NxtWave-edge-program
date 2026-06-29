@@ -12,6 +12,7 @@ import {
   getCollege, getStudentsByCollege, getAssessmentsByCollege,
   getDriveExpensesByCollege, createDriveExpense, updateDriveExpense,
   submitDriveExpense, getDriveExpense, getDrivesByCollege, getDrive,
+  requestCollegeDeletion, approveCollegeDeletion, denyCollegeDeletion,
 } from '../../api/firestore'
 import { STAGE_LABELS, STAGE_COLORS, OUTREACH_LABELS } from '../../utils/stages'
 import { useAuth } from '../../contexts/AuthContext'
@@ -34,6 +35,9 @@ export default function CollegeDetail() {
   const { id }      = useParams()
   const { profile } = useAuth()
 
+  const isAdmin         = profile?.role === 'admin'
+  const isOnboardingTeam = profile?.role === 'onboarding_team'
+
   const [college, setCollege]         = useState(null)
   const [students, setStudents]       = useState([])
   const [assessments, setAssessments] = useState([])
@@ -41,6 +45,11 @@ export default function CollegeDetail() {
   const [drives, setDrives]           = useState([])
   const [loading, setLoading]         = useState(true)
   const [tab, setTab]                 = useState('drives')
+
+  // Deletion request state
+  const [deletionModal, setDeletionModal]     = useState(false)
+  const [deletionReason, setDeletionReason]   = useState('')
+  const [deletionBusy, setDeletionBusy]       = useState(false)
 
   const [expenseModal, setExpenseModal]   = useState(false)
   const [selectedExp, setSelectedExp]     = useState(null)
@@ -56,6 +65,9 @@ export default function CollegeDetail() {
 
   const loadDrives = () =>
     getDrivesByCollege(id).then(setDrives)
+
+  const reloadCollege = () =>
+    getCollege(id).then(setCollege)
 
   useEffect(() => {
     Promise.allSettled([
@@ -80,6 +92,50 @@ export default function CollegeDetail() {
     acc[s.currentStage] = (acc[s.currentStage] ?? 0) + 1
     return acc
   }, {})
+
+  const hasActiveDrives = drives.some(d =>
+    ['pending_approval', 'approved', 'college_confirmed'].includes(d.status)
+  )
+
+  const expensesTotal = expenses.reduce((s, e) => s + (e.totalAmount ?? 0), 0)
+
+  const submitDeletionRequest = async () => {
+    if (!deletionReason.trim()) return
+    setDeletionBusy(true)
+    try {
+      await requestCollegeDeletion(id, {
+        reason: deletionReason.trim(),
+        requestedBy: profile?.name ?? '',
+        requestedByUid: profile?.uid ?? '',
+        impactSummary: { studentCount: students.length, driveCount: drives.length, expensesTotal },
+      })
+      await reloadCollege()
+      setDeletionModal(false)
+      setDeletionReason('')
+    } finally {
+      setDeletionBusy(false)
+    }
+  }
+
+  const handleApproveDeletion = async () => {
+    setDeletionBusy(true)
+    try {
+      await approveCollegeDeletion(id)
+      await reloadCollege()
+    } finally {
+      setDeletionBusy(false)
+    }
+  }
+
+  const handleDenyDeletion = async () => {
+    setDeletionBusy(true)
+    try {
+      await denyCollegeDeletion(id)
+      await reloadCollege()
+    } finally {
+      setDeletionBusy(false)
+    }
+  }
 
   // ── Expense handlers ─────────────────────────────────────────────────────
 
@@ -133,7 +189,9 @@ export default function CollegeDetail() {
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold text-gray-900">{college.name}</h1>
+            <h1 className={`text-xl font-semibold ${college.deleted ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+              {college.name}
+            </h1>
             {college.collegeId && (
               <span className="text-xs font-mono bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">
                 {college.collegeId}
@@ -142,11 +200,85 @@ export default function CollegeDetail() {
           </div>
           <p className="text-sm text-gray-500 mt-0.5">{[college.city, college.state].filter(Boolean).join(', ')}</p>
         </div>
-        <Badge
-          label={OUTREACH_LABELS[college.outreachStatus] ?? college.outreachStatus}
-          className={OUTREACH_COLORS[college.outreachStatus] ?? 'bg-gray-100 text-gray-600'}
-        />
+        <div className="flex items-center gap-2">
+          <Badge
+            label={OUTREACH_LABELS[college.outreachStatus] ?? college.outreachStatus}
+            className={OUTREACH_COLORS[college.outreachStatus] ?? 'bg-gray-100 text-gray-600'}
+          />
+          {isOnboardingTeam && !college.deleted && !college.deletionRequest && (
+            <button
+              onClick={() => setDeletionModal(true)}
+              disabled={hasActiveDrives}
+              title={hasActiveDrives ? 'Cancel all active drives before requesting deletion' : 'Request deletion of this college'}
+              className="text-xs text-red-400 hover:text-red-600 hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Request Deletion
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* ── Deletion banners ── */}
+      {college.deleted && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800">
+          <p className="font-semibold">This college has been deleted.</p>
+          <p className="text-xs mt-0.5 text-red-600">
+            All associated drives, students, and expenses have been soft-deleted and removed from active views.
+          </p>
+        </div>
+      )}
+
+      {!college.deleted && college.deletionRequest?.status === 'pending' && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-orange-800">Deletion requested</p>
+            <p className="text-xs text-orange-700 mt-0.5">
+              Requested by <strong>{college.deletionRequest.requestedBy}</strong> on{' '}
+              {new Date(college.deletionRequest.requestedAt).toLocaleDateString()}
+            </p>
+            <p className="text-xs text-orange-700 mt-1">
+              <strong>Reason:</strong> {college.deletionRequest.reason}
+            </p>
+            {college.deletionRequest.impactSummary && (
+              <p className="text-xs text-orange-600 mt-1">
+                Impact: {college.deletionRequest.impactSummary.studentCount} students ·{' '}
+                {college.deletionRequest.impactSummary.driveCount} drives ·{' '}
+                ₹{(college.deletionRequest.impactSummary.expensesTotal ?? 0).toLocaleString('en-IN')} expenses
+              </p>
+            )}
+          </div>
+          {isAdmin && (
+            <div className="flex gap-2">
+              <Button size="sm" variant="secondary" onClick={handleApproveDeletion} disabled={deletionBusy}>
+                {deletionBusy ? 'Processing…' : 'Approve Deletion'}
+              </Button>
+              <button
+                onClick={handleDenyDeletion}
+                disabled={deletionBusy}
+                className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+              >
+                Deny
+              </button>
+            </div>
+          )}
+          {!isAdmin && (
+            <p className="text-xs text-orange-600">Awaiting admin approval.</p>
+          )}
+        </div>
+      )}
+
+      {!college.deleted && college.deletionRequest?.status === 'denied' && isOnboardingTeam && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center justify-between">
+          <p className="text-xs text-gray-500">Previous deletion request was denied by admin.</p>
+          <button
+            onClick={() => { setDeletionModal(true); setDeletionReason('') }}
+            disabled={hasActiveDrives}
+            className="text-xs text-red-400 hover:text-red-600 hover:underline disabled:opacity-40"
+          >
+            Re-request
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-4 gap-4">
         <Card className="p-4">
@@ -508,6 +640,47 @@ function DrivesTab({ college, drives, onRefresh }) {
             onClose={() => { setModal(null); setFreshDrive(null) }}
           />
         )}
+      </Modal>
+
+      {/* Deletion request modal */}
+      <Modal
+        open={deletionModal}
+        onClose={() => { setDeletionModal(false); setDeletionReason('') }}
+        title="Request College Deletion"
+      >
+        <div className="space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700 space-y-1">
+            <p className="font-semibold">This will soft-delete the following data:</p>
+            <ul className="list-disc list-inside space-y-0.5 mt-1">
+              <li>{students.length} student{students.length !== 1 ? 's' : ''}</li>
+              <li>{drives.length} drive{drives.length !== 1 ? 's' : ''}</li>
+              <li>₹{expensesTotal.toLocaleString('en-IN')} in expenses</li>
+            </ul>
+            <p className="mt-1">Records will be hidden from all views but not permanently removed.</p>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Reason for deletion *</label>
+            <textarea
+              className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+              rows={3}
+              value={deletionReason}
+              onChange={e => setDeletionReason(e.target.value)}
+              placeholder="Explain why this college should be removed…"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => { setDeletionModal(false); setDeletionReason('') }}>
+              Cancel
+            </Button>
+            <button
+              onClick={submitDeletionRequest}
+              disabled={!deletionReason.trim() || deletionBusy}
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {deletionBusy ? 'Submitting…' : 'Submit Request'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

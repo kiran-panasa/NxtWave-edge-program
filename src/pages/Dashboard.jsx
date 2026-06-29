@@ -6,6 +6,7 @@ import {
   getStageCount,
   getAllDrivesPendingApproval,
   getPendingUsers,
+  getDeletionRequests,
   getAllDrives,
   getCollegesByOnboarder,
 } from '../api/firestore'
@@ -104,15 +105,17 @@ function FunnelSection({ counts, total }) {
 }
 
 function AdminDashboard({ counts, total }) {
-  const [pendingDrives, setPendingDrives] = useState([])
-  const [pendingUsers, setPendingUsers]   = useState([])
-  const [loading, setLoading]             = useState(true)
+  const [pendingDrives,    setPendingDrives]    = useState([])
+  const [pendingUsers,     setPendingUsers]     = useState([])
+  const [deletionRequests, setDeletionRequests] = useState([])
+  const [loading, setLoading]                   = useState(true)
 
   useEffect(() => {
-    Promise.allSettled([getAllDrivesPendingApproval(), getPendingUsers()])
-      .then(([d, u]) => {
+    Promise.allSettled([getAllDrivesPendingApproval(), getPendingUsers(), getDeletionRequests()])
+      .then(([d, u, del]) => {
         setPendingDrives(d.status === 'fulfilled' ? d.value : [])
         setPendingUsers(u.status === 'fulfilled' ? u.value : [])
+        setDeletionRequests(del.status === 'fulfilled' ? del.value : [])
       })
       .finally(() => setLoading(false))
   }, [])
@@ -178,6 +181,40 @@ function AdminDashboard({ counts, total }) {
           )}
         </Card>
       </div>
+
+      {/* Pending Deletion Requests */}
+      {(loading || deletionRequests.length > 0) && (
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-gray-700">Pending Deletion Requests</h2>
+            <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+              {loading ? '…' : deletionRequests.length}
+            </span>
+          </div>
+          {loading ? (
+            <div className="flex justify-center py-4"><Spinner size="sm" /></div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {deletionRequests.map(c => (
+                <Link
+                  key={c.id}
+                  to={`/colleges/${c.id}`}
+                  className="flex items-center justify-between py-2.5 hover:bg-gray-50 -mx-1 px-1 rounded transition-colors"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{c.name}</p>
+                    <p className="text-xs text-gray-400">
+                      Requested by {c.deletionRequest?.requestedBy} · {c.deletionRequest?.impactSummary?.studentCount ?? 0} students
+                    </p>
+                    <p className="text-xs text-gray-500 italic mt-0.5">{c.deletionRequest?.reason}</p>
+                  </div>
+                  <span className="text-xs text-red-500 font-medium shrink-0 ml-3">Review →</span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       <FunnelSection counts={counts} total={total} />
     </div>

@@ -28,7 +28,7 @@ export const updateUser = (id, data) =>
 
 export const getColleges = () =>
   getDocs(query(collection(db, 'colleges'), orderBy('name'))).then(s =>
-    s.docs.map(d => ({ id: d.id, ...d.data() }))
+    s.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.deleted)
   )
 
 export const getCollege = (id) =>
@@ -53,6 +53,53 @@ export const updateCollege = (id, data) =>
 
 export const deleteCollege = (id) =>
   deleteDoc(doc(db, 'colleges', id))
+
+// ─── College Deletion Requests ───────────────────────────────────────────────
+
+export const requestCollegeDeletion = (collegeId, { reason, requestedBy, requestedByUid, impactSummary }) =>
+  updateDoc(doc(db, 'colleges', collegeId), {
+    deletionRequest: {
+      status: 'pending',
+      reason,
+      requestedBy,
+      requestedByUid,
+      requestedAt: new Date().toISOString(),
+      impactSummary,
+    },
+    ...ts(),
+  })
+
+export const denyCollegeDeletion = (collegeId) =>
+  updateDoc(doc(db, 'colleges', collegeId), {
+    'deletionRequest.status': 'denied',
+    'deletionRequest.reviewedAt': new Date().toISOString(),
+    ...ts(),
+  })
+
+export const approveCollegeDeletion = async (collegeId) => {
+  const [drivesSnap, studentsSnap, expensesSnap] = await Promise.all([
+    getDocs(query(collection(db, 'drives'),        where('collegeId', '==', collegeId))),
+    getDocs(query(collection(db, 'students'),      where('collegeId', '==', collegeId))),
+    getDocs(query(collection(db, 'driveExpenses'), where('collegeId', '==', collegeId))),
+  ])
+
+  const ops = [
+    { ref: doc(db, 'colleges', collegeId), data: { deleted: true, deletedAt: serverTimestamp(), 'deletionRequest.status': 'approved' } },
+    ...drivesSnap.docs.map(d => ({ ref: d.ref, data: { deleted: true } })),
+    ...studentsSnap.docs.map(d => ({ ref: d.ref, data: { deleted: true } })),
+    ...expensesSnap.docs.map(d => ({ ref: d.ref, data: { deleted: true } })),
+  ]
+
+  for (let i = 0; i < ops.length; i += 499) {
+    const batch = writeBatch(db)
+    ops.slice(i, i + 499).forEach(op => batch.update(op.ref, op.data))
+    await batch.commit()
+  }
+}
+
+export const getDeletionRequests = () =>
+  getDocs(query(collection(db, 'colleges'), where('deletionRequest.status', '==', 'pending')))
+    .then(s => s.docs.map(d => ({ id: d.id, ...d.data() })))
 
 export const subscribeToColleges = (callback) =>
   onSnapshot(query(collection(db, 'colleges'), orderBy('name')), snap =>
@@ -397,20 +444,22 @@ export const updateDriveInfra = (id, infra, changeEntry) =>
 export const getAllDrivesPendingApproval = () =>
   getDocs(query(collection(db, 'drives'), where('status', '==', 'pending_approval')))
     .then(s => s.docs.map(toDrive)
+      .filter(d => !d.deleted)
       .sort((a, b) => (a.proposedDate ?? '').localeCompare(b.proposedDate ?? '')))
 
 export const getAllDrivesForCalendar = () =>
   getDocs(query(collection(db, 'drives'), where('status', 'in', ['approved', 'college_confirmed', 'completed'])))
-    .then(s => s.docs.map(toDrive))
+    .then(s => s.docs.map(toDrive).filter(d => !d.deleted))
 
 export const getAllDrives = () =>
   getDocs(collection(db, 'drives'))
     .then(s => s.docs.map(toDrive)
+      .filter(d => !d.deleted)
       .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)))
 
 export const getCollegesByOnboarder = (uid) =>
   getDocs(query(collection(db, 'colleges'), where('onboardedByUid', '==', uid)))
-    .then(s => s.docs.map(d => ({ id: d.id, ...d.data() })))
+    .then(s => s.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.deleted))
 
 // ─── Outreach Statuses ────────────────────────────────────────────────────────
 
