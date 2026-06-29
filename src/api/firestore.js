@@ -36,7 +36,7 @@ export const getCollege = (id) =>
 
 export const createCollege = async (data) => {
   const code      = data.shortCode?.trim().toUpperCase()
-  const collegeId = code ? await generateCollegeId(code) : null
+  const collegeId = code ? await generateCollegeId(code, ayToCompact(data.academicYear)) : null
   return addDoc(collection(db, 'colleges'), {
     ...data,
     shortCode: code ?? null,
@@ -330,8 +330,19 @@ function compactAY() {
   return `${String(start).slice(2)}${String(start + 1).slice(2)}`
 }
 
-export const generateCollegeId = async (shortCode) => {
-  const ay         = compactAY()
+// "2025-26" → "2526"; falls back to current AY if format doesn't match
+function ayToCompact(ay) {
+  if (!ay) return compactAY()
+  const parts = ay.trim().split('-')
+  if (parts.length !== 2) return compactAY()
+  const s = parts[0].slice(-2)
+  const e = parts[1].slice(-2)
+  if (!/^\d{2}$/.test(s) || !/^\d{2}$/.test(e)) return compactAY()
+  return s + e
+}
+
+export const generateCollegeId = async (shortCode, compactAy) => {
+  const ay         = compactAy ?? compactAY()
   const counterKey = `${shortCode}_${ay}`
   const counter    = doc(db, 'config', 'counters')
   let newCount

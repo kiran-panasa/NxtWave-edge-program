@@ -34,15 +34,14 @@ function currentAY() {
   return `${s}-${String(s + 1).slice(2)}`
 }
 
-function getAYOptions() {
-  const now = new Date()
-  const y = now.getFullYear()
-  const s = now.getMonth() >= 5 ? y : y - 1
-  return [
-    `${s - 1}-${String(s).slice(2)}`,
-    `${s}-${String(s + 1).slice(2)}`,
-    `${s + 1}-${String(s + 2).slice(2)}`,
-  ]
+function ayToCompact(ay) {
+  if (!ay) return null
+  const parts = ay.trim().split('-')
+  if (parts.length !== 2) return null
+  const s = parts[0].slice(-2)
+  const e = parts[1].slice(-2)
+  if (!/^\d{2}$/.test(s) || !/^\d{2}$/.test(e)) return null
+  return s + e
 }
 
 const DEFAULT_STATUSES = OUTREACH_STATUSES.map(key => ({ key, label: OUTREACH_LABELS[key] }))
@@ -201,8 +200,6 @@ export default function CollegesPage() {
     }
   }
 
-  const ayOptions = getAYOptions()
-
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -322,7 +319,7 @@ export default function CollegesPage() {
               />
               {form.shortCode && (
                 <span className="text-xs text-gray-400">
-                  ID will look like: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-brand-700 font-semibold">{form.shortCode}-2627-001</code>
+                  ID will look like: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-brand-700 font-semibold">{form.shortCode}-{ayToCompact(form.academicYear) ?? '????'}-001</code>
                 </span>
               )}
             </div>
@@ -330,13 +327,13 @@ export default function CollegesPage() {
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Academic Year</label>
-            <select
-              className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+            <input
+              className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 w-36"
               value={form.academicYear}
               onChange={e => setForm(f => ({ ...f, academicYear: e.target.value }))}
-            >
-              {ayOptions.map(ay => <option key={ay} value={ay}>{ay}</option>)}
-            </select>
+              placeholder="e.g. 2025-26"
+            />
+            <p className="text-xs text-gray-400">Format: YYYY-YY (e.g. 2025-26)</p>
           </div>
 
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide pt-2">Location</p>
