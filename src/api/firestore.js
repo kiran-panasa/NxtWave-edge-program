@@ -35,11 +35,14 @@ export const getCollege = (id) =>
   getDoc(doc(db, 'colleges', id)).then(d => d.exists() ? { id: d.id, ...d.data() } : null)
 
 export const createCollege = async (data) => {
-  const code      = data.shortCode?.trim().toUpperCase()
-  const collegeId = code ? await generateCollegeId(code, ayToCompact(data.academicYear)) : null
+  const code      = data.shortCode?.trim().toUpperCase() || null
+  const campus    = data.campusCode?.trim().toUpperCase() || null
+  const compact   = ayToCompact(data.academicYear)
+  const collegeId = code ? await generateCollegeId(code, campus, compact) : null
   return addDoc(collection(db, 'colleges'), {
     ...data,
-    shortCode: code ?? null,
+    shortCode: code,
+    campusCode: campus,
     ...(collegeId ? { collegeId } : {}),
     ...tsNew(),
   })
@@ -341,9 +344,10 @@ function ayToCompact(ay) {
   return s + e
 }
 
-export const generateCollegeId = async (shortCode, compactAy) => {
+export const generateCollegeId = async (shortCode, campusCode, compactAy) => {
   const ay         = compactAy ?? compactAY()
-  const counterKey = `${shortCode}_${ay}`
+  const prefix     = campusCode ? `${shortCode}-${campusCode}` : shortCode
+  const counterKey = campusCode ? `${shortCode}_${campusCode}_${ay}` : `${shortCode}_${ay}`
   const counter    = doc(db, 'config', 'counters')
   let newCount
   await runTransaction(db, async (tx) => {
@@ -352,7 +356,7 @@ export const generateCollegeId = async (shortCode, compactAy) => {
     newCount   = (data[counterKey] ?? 0) + 1
     tx.set(counter, { [counterKey]: newCount }, { merge: true })
   })
-  return `${shortCode}-${ay}-${String(newCount).padStart(3, '0')}`
+  return `${prefix}-${ay}-${String(newCount).padStart(3, '0')}`
 }
 
 // ─── Drives ───────────────────────────────────────────────────────────────────

@@ -46,8 +46,11 @@ function ayToCompact(ay) {
 
 const DEFAULT_STATUSES = OUTREACH_STATUSES.map(key => ({ key, label: OUTREACH_LABELS[key] }))
 
+const suggestCampusCode = (city) =>
+  city.trim().replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase()
+
 const EMPTY_FORM = {
-  name: '', shortCode: '', city: '', state: '',
+  name: '', shortCode: '', campusCode: '', city: '', state: '',
   contactName: '', contactEmail: '', contactPhone: '', contactRole: '',
   outreachStatus: 'contacted',
   academicYear: currentAY(),
@@ -119,7 +122,8 @@ export default function CollegesPage() {
   const openEdit = (c) => {
     setEditing(c)
     setForm({
-      name: c.name, shortCode: c.shortCode ?? '', city: c.city ?? '', state: c.state ?? '',
+      name: c.name, shortCode: c.shortCode ?? '', campusCode: c.campusCode ?? '',
+      city: c.city ?? '', state: c.state ?? '',
       contactName: c.contactName ?? '', contactEmail: c.contactEmail ?? '', contactPhone: c.contactPhone ?? '',
       contactRole: c.contactRole ?? '',
       outreachStatus: c.outreachStatus ?? 'contacted',
@@ -319,12 +323,32 @@ export default function CollegesPage() {
               />
               {form.shortCode && (
                 <span className="text-xs text-gray-400">
-                  ID will look like: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-brand-700 font-semibold">{form.shortCode}-{ayToCompact(form.academicYear) ?? '????'}-001</code>
+                  ID will look like: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-brand-700 font-semibold">
+                    {form.shortCode}{form.campusCode ? `-${form.campusCode}` : ''}-{ayToCompact(form.academicYear) ?? '????'}-001
+                  </code>
                 </span>
               )}
             </div>
             <p className="text-xs text-gray-400">3–6 uppercase letters. Once set, this never changes.</p>
           </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">
+              Campus Code <span className="text-gray-400 font-normal">(optional — for multi-city colleges)</span>
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 w-24 uppercase font-mono tracking-widest disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                value={form.campusCode}
+                onChange={e => setForm(f => ({ ...f, campusCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) }))}
+                placeholder="HYD"
+                maxLength={4}
+                disabled={!!(editing?.campusCode)}
+              />
+              <span className="text-xs text-gray-400">e.g. HYD, VJA, GUN — 2–4 letters</span>
+            </div>
+            <p className="text-xs text-gray-400">Once set, cannot be changed — it's embedded in the college ID.</p>
+          </div>
+
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Academic Year</label>
             <input
@@ -338,7 +362,21 @@ export default function CollegesPage() {
 
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide pt-2">Location</p>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="City" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
+            <Input
+              label="City"
+              value={form.city}
+              onChange={e => {
+                const city = e.target.value
+                setForm(f => ({
+                  ...f,
+                  city,
+                  // Auto-fill campus code only if not manually set and not editing an existing one
+                  campusCode: (!editing?.campusCode && (f.campusCode === suggestCampusCode(f.city) || f.campusCode === ''))
+                    ? suggestCampusCode(city)
+                    : f.campusCode,
+                }))
+              }}
+            />
             <Input label="State" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} />
           </div>
           <Input
