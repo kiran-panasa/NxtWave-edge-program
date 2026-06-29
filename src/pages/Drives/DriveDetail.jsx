@@ -141,7 +141,9 @@ export default function DriveDetail({ drive, onUpdate, onClose }) {
     )
   }
 
-  const canShowInfra = ['college_confirmed', 'completed', 'cancelled'].includes(drive.status)
+  const canShowInfra  = ['college_confirmed', 'completed', 'cancelled'].includes(drive.status)
+  const today         = new Date().toISOString().slice(0, 10)
+  const driveHappened = !drive.proposedDate || drive.proposedDate <= today
 
   return (
     <div className="space-y-5 text-sm">
@@ -201,9 +203,16 @@ export default function DriveDetail({ drive, onUpdate, onClose }) {
             <Button size="sm" onClick={confirmCollege}>Mark College Confirmed</Button>
           )}
 
-          {/* Mark completed */}
+          {/* Mark completed — only after the drive date */}
           {canOnboard && drive.status === 'college_confirmed' && (
-            <Button size="sm" onClick={markCompleted}>Mark Completed</Button>
+            <Button
+              size="sm"
+              onClick={markCompleted}
+              disabled={!driveHappened}
+              title={!driveHappened ? `Drive is on ${drive.proposedDate} — can only mark completed on or after the drive date` : undefined}
+            >
+              Mark Completed
+            </Button>
           )}
 
           {/* Cancel */}
