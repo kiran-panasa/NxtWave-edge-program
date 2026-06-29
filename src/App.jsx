@@ -62,8 +62,22 @@ function ProtectedRoute({ children, page }) {
     </div>
   )
 
-  // Page-level access check — redirect to dashboard if role lacks access
-  if (page && !canAccess(page)) return <Navigate to="/" replace />
+  // Page-level access check
+  if (page && !canAccess(page)) {
+    // Avoid infinite redirect if dashboard itself isn't accessible
+    if (page === 'dashboard') return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 w-full max-w-sm text-center space-y-3">
+          <div className="text-brand-700 font-bold text-xl">NxtWave</div>
+          <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto text-gray-400 text-xl">🔒</div>
+          <h2 className="text-base font-semibold text-gray-900">No pages assigned</h2>
+          <p className="text-sm text-gray-500">Your account is active but no pages have been assigned to your role yet. Contact your admin.</p>
+          <button onClick={() => import('./firebase').then(({ auth }) => auth.signOut())} className="text-sm text-gray-400 hover:text-gray-600 hover:underline">Sign out</button>
+        </div>
+      </div>
+    )
+    return <Navigate to="/" replace />
+  }
 
   return <Layout>{children}</Layout>
 }

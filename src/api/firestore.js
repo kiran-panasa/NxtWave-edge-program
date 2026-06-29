@@ -298,13 +298,18 @@ export const setAppConfig = (data) =>
 
 // ─── Invites ──────────────────────────────────────────────────────────────────
 
-export const createInvite = (email) => {
+export const createInvite = (email, role) => {
   const token = crypto.randomUUID()
-  return setDoc(doc(db, 'invites', token), { email, used: false, ...tsNew() }).then(() => token)
+  return setDoc(doc(db, 'invites', token), { email, role: role ?? null, used: false, ...tsNew() }).then(() => token)
 }
 
 export const getInvite = (token) =>
   getDoc(doc(db, 'invites', token)).then(d => d.exists() ? { token, ...d.data() } : null)
+
+export const getInvites = () =>
+  getDocs(query(collection(db, 'invites'), orderBy('createdAt', 'desc'))).then(s =>
+    s.docs.map(d => ({ token: d.id, ...d.data() }))
+  )
 
 export const markInviteUsed = (token) =>
   updateDoc(doc(db, 'invites', token), { used: true, usedAt: serverTimestamp() })

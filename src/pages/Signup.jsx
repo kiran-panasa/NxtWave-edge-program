@@ -66,7 +66,8 @@ export default function Signup() {
     try {
       const cred = await signUp(email, password)
       const status = inviteToken && invite ? 'active' : 'pending'
-      await createUser(cred.user.uid, { name, email, role: 'auditor', status })
+      const role   = (inviteToken && invite?.role) ? invite.role : 'auditor'
+      await createUser(cred.user.uid, { name, email, role, status })
       if (inviteToken && invite) await markInviteUsed(inviteToken)
       navigate(status === 'active' ? '/' : '/login?pending=1')
     } catch (err) {

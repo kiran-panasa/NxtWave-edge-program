@@ -7,7 +7,7 @@ import Spinner from '../../components/ui/Spinner'
 import {
   getAllUsers, updateUser, createUser,
   getAppConfig, setAppConfig,
-  createInvite, getPendingUsers,
+  createInvite, getPendingUsers, getInvites,
   getPermissions, setPermissions,
   getCustomRoles, saveCustomRoles,
 } from '../../api/firestore'
@@ -62,10 +62,13 @@ function UsersTab() {
   const [form, setForm]       = useState({ name: '', email: '', password: '', role: '' })
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState('')
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteLink, setInviteLink]   = useState('')
-  const [inviting, setInviting]       = useState(false)
-  const [inviteError, setInviteError] = useState('')
+  const [inviteEmail, setInviteEmail]   = useState('')
+  const [inviteRole, setInviteRole]     = useState('')
+  const [inviteLink, setInviteLink]     = useState('')
+  const [inviting, setInviting]         = useState(false)
+  const [inviteError, setInviteError]   = useState('')
+  const [invites, setInvites]           = useState([])
+  const [copied, setCopied]             = useState('')  // token being copied
   const [changingRole, setChangingRole] = useState({}) // userId → true while saving
 
   // Default role to first available when roles load
@@ -74,12 +77,18 @@ function UsersTab() {
   }, [roles])
 
   const load = async () => {
-    const [all, pend] = await Promise.all([getAllUsers(), getPendingUsers()])
+    const [all, pend, invs] = await Promise.all([getAllUsers(), getPendingUsers(), getInvites()])
     setUsers(all)
     setPending(pend)
+    setInvites(invs)
     setLoading(false)
   }
   useEffect(() => { load() }, [])
+
+  // Set default invite role once roles load
+  useEffect(() => {
+    if (roles.length > 0 && !inviteRole) setInviteRole(roles[0].key)
+  }, [roles])
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -118,14 +127,22 @@ function UsersTab() {
     setInviteLink('')
     setInviting(true)
     try {
-      const token = await createInvite(inviteEmail)
+      const token = await createInvite(inviteEmail, inviteRole)
       setInviteLink(`${window.location.origin}/signup?invite=${token}`)
       setInviteEmail('')
+      await load()
     } catch {
       setInviteError('Failed to create invite. Please try again.')
     } finally {
       setInviting(false)
     }
+  }
+
+  const copyInviteLink = (token) => {
+    const link = `${window.location.origin}/signup?invite=${token}`
+    navigator.clipboard.writeText(link)
+    setCopied(token)
+    setTimeout(() => setCopied(''), 2000)
   }
 
   const roleLabel = (key) => roles.find(r => r.key === key)?.label ?? key
@@ -152,22 +169,73 @@ function UsersTab() {
         </Card>
       )}
 
-      <Card className="p-6">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">Invite User</h2>
+      <Card className="p-6 space-y-5">
+        <h2 className="text-sm font-semibold text-gray-700">Invite User</h2>
         <form onSubmit={handleInvite} className="flex gap-3 items-end">
           <div className="flex-1">
             <Input label="Email address" type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} required placeholder="colleague@nxtwave.tech" />
           </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Role</label>
+            <select
+              className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              value={inviteRole}
+              onChange={e => setInviteRole(e.target.value)}
+            >
+              {roles.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+            </select>
+          </div>
           <Button type="submit" disabled={inviting}>{inviting ? 'Generating…' : 'Generate invite'}</Button>
         </form>
-        {inviteError && <p className="text-xs text-red-500 mt-2">{inviteError}</p>}
+        {inviteError && <p className="text-xs text-red-500">{inviteError}</p>}
         {inviteLink && (
-          <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
             <p className="text-xs text-gray-500 mb-2">Share this link — it can only be used once:</p>
             <div className="flex gap-2 items-center">
               <code className="text-xs text-gray-700 flex-1 break-all">{inviteLink}</code>
               <button onClick={() => navigator.clipboard.writeText(inviteLink)} className="text-xs text-brand-600 hover:underline whitespace-nowrap">Copy</button>
             </div>
+          </div>
+        )}
+
+        {/* Invite history */}
+        {invites.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Sent Invites</p>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-left">
+                  <th className="py-2 pr-4 font-medium text-gray-500">Email</th>
+                  <th className="py-2 pr-4 font-medium text-gray-500">Role</th>
+                  <th className="py-2 pr-4 font-medium text-gray-500">Status</th>
+                  <th className="py-2 pr-4 font-medium text-gray-500">Created</th>
+                  <th className="py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {invites.map(inv => (
+                  <tr key={inv.token} className="border-b border-gray-50">
+                    <td className="py-2 pr-4 text-gray-700">{inv.email}</td>
+                    <td className="py-2 pr-4 text-gray-500">{roleLabel(inv.role) || '—'}</td>
+                    <td className="py-2 pr-4">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${inv.used ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                        {inv.used ? 'Used' : 'Pending'}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4 text-gray-400 text-xs">
+                      {inv.createdAt?.toDate?.().toLocaleDateString() ?? '—'}
+                    </td>
+                    <td className="py-2 text-right">
+                      {!inv.used && (
+                        <button onClick={() => copyInviteLink(inv.token)} className="text-xs text-brand-600 hover:underline whitespace-nowrap">
+                          {copied === inv.token ? 'Copied!' : 'Copy link'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </Card>
