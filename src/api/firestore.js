@@ -378,3 +378,20 @@ export const getAllDrivesPendingApproval = () =>
 export const getAllDrivesForCalendar = () =>
   getDocs(query(collection(db, 'drives'), where('status', 'in', ['approved', 'college_confirmed', 'completed'])))
     .then(s => s.docs.map(toDrive))
+
+// ─── Outreach Statuses ────────────────────────────────────────────────────────
+
+export const DEFAULT_OUTREACH_STATUSES = [
+  { key: 'contacted',            label: 'Contacted' },
+  { key: 'agreed',               label: 'Agreed' },
+  { key: 'assessment_scheduled', label: 'Assessment Scheduled' },
+  { key: 'assessment_done',      label: 'Assessment Done' },
+]
+
+export const getOutreachStatuses = () =>
+  getDoc(doc(db, 'config', 'outreachStatuses')).then(d =>
+    d.exists() ? d.data().statuses : DEFAULT_OUTREACH_STATUSES
+  )
+
+export const saveOutreachStatuses = (statuses) =>
+  setDoc(doc(db, 'config', 'outreachStatuses'), { statuses })

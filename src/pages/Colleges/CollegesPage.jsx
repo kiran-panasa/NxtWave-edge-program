@@ -7,21 +7,55 @@ import Badge from '../../components/ui/Badge'
 import Modal from '../../components/ui/Modal'
 import Input from '../../components/ui/Input'
 import Spinner from '../../components/ui/Spinner'
-import { getColleges, createCollege, updateCollege, batchUpsertColleges } from '../../api/firestore'
+import { getColleges, createCollege, updateCollege, batchUpsertColleges, getOutreachStatuses } from '../../api/firestore'
 import { OUTREACH_LABELS, OUTREACH_STATUSES } from '../../utils/stages'
 import { useAuth } from '../../contexts/AuthContext'
 
-const OUTREACH_COLORS = {
-  contacted:            'bg-gray-100 text-gray-600',
-  agreed:               'bg-blue-100 text-blue-700',
-  assessment_scheduled: 'bg-yellow-100 text-yellow-700',
-  assessment_done:      'bg-green-100 text-green-700',
+const COLOR_PALETTE = [
+  'bg-gray-100 text-gray-600',
+  'bg-blue-100 text-blue-700',
+  'bg-yellow-100 text-yellow-700',
+  'bg-green-100 text-green-700',
+  'bg-purple-100 text-purple-700',
+  'bg-orange-100 text-orange-700',
+  'bg-pink-100 text-pink-700',
+  'bg-teal-100 text-teal-700',
+]
+
+const statusColor = (statuses, key) => {
+  const idx = statuses.findIndex(s => s.key === key)
+  return COLOR_PALETTE[Math.max(0, idx) % COLOR_PALETTE.length]
 }
 
-const EMPTY_FORM = { name: '', shortCode: '', city: '', state: '', contactName: '', contactEmail: '', contactPhone: '', outreachStatus: 'contacted' }
+function currentAY() {
+  const now = new Date()
+  const y = now.getFullYear()
+  const s = now.getMonth() >= 5 ? y : y - 1
+  return `${s}-${String(s + 1).slice(2)}`
+}
 
-// Auto-suggest: initials of each word, max 6 chars, uppercase
-// "JNTU Hyderabad" → "JNTUH", "Osmania University" → "OU"
+function getAYOptions() {
+  const now = new Date()
+  const y = now.getFullYear()
+  const s = now.getMonth() >= 5 ? y : y - 1
+  return [
+    `${s - 1}-${String(s).slice(2)}`,
+    `${s}-${String(s + 1).slice(2)}`,
+    `${s + 1}-${String(s + 2).slice(2)}`,
+  ]
+}
+
+const DEFAULT_STATUSES = OUTREACH_STATUSES.map(key => ({ key, label: OUTREACH_LABELS[key] }))
+
+const EMPTY_FORM = {
+  name: '', shortCode: '', city: '', state: '',
+  contactName: '', contactEmail: '', contactPhone: '', contactRole: '',
+  outreachStatus: 'contacted',
+  academicYear: currentAY(),
+  mapsLink: '',
+  onboardedByName: '', onboardedByUid: '',
+}
+
 const suggestShortCode = (name) =>
   name.trim().split(/\s+/).map(w => w[0] ?? '').join('').toUpperCase().slice(0, 6)
 
@@ -40,11 +74,12 @@ function downloadCollegeSample() {
 }
 
 export default function CollegesPage() {
-  const { isGuest } = useAuth()
+  const { isGuest, profile } = useAuth()
   const [colleges, setColleges]   = useState([])
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState('')
   const [statusFilter, setStatus] = useState('')
+  const [outreachStatuses, setOutreachStatuses] = useState(DEFAULT_STATUSES)
 
   // single add/edit modal
   const [modal, setModal]     = useState(false)
@@ -61,9 +96,12 @@ export default function CollegesPage() {
   const [bulkSaving, setBulkSaving] = useState(false)
   const [bulkDone, setBulkDone]     = useState(null)
 
-  const load = () => {
+  const load = async () => {
     if (isGuest) { setLoading(false); return }
-    getColleges().then(setColleges).finally(() => setLoading(false))
+    const [cols, statuses] = await Promise.all([getColleges(), getOutreachStatuses()])
+    setColleges(cols)
+    setOutreachStatuses(statuses)
+    setLoading(false)
   }
   useEffect(() => { load() }, [])
 
@@ -74,10 +112,22 @@ export default function CollegesPage() {
   })
 
   // ── Single add/edit ──────────────────────────────────────────────────────
-  const openAdd  = () => { setEditing(null); setForm(EMPTY_FORM); setModal(true) }
+  const openAdd = () => {
+    setEditing(null)
+    setForm({ ...EMPTY_FORM, academicYear: currentAY(), onboardedByName: profile?.name ?? '', onboardedByUid: profile?.uid ?? '' })
+    setModal(true)
+  }
   const openEdit = (c) => {
     setEditing(c)
-    setForm({ name: c.name, shortCode: c.shortCode ?? '', city: c.city ?? '', state: c.state ?? '', contactName: c.contactName ?? '', contactEmail: c.contactEmail ?? '', contactPhone: c.contactPhone ?? '', outreachStatus: c.outreachStatus ?? 'contacted' })
+    setForm({
+      name: c.name, shortCode: c.shortCode ?? '', city: c.city ?? '', state: c.state ?? '',
+      contactName: c.contactName ?? '', contactEmail: c.contactEmail ?? '', contactPhone: c.contactPhone ?? '',
+      contactRole: c.contactRole ?? '',
+      outreachStatus: c.outreachStatus ?? 'contacted',
+      academicYear: c.academicYear ?? currentAY(),
+      mapsLink: c.mapsLink ?? '',
+      onboardedByName: c.onboardedByName ?? '', onboardedByUid: c.onboardedByUid ?? '',
+    })
     setModal(true)
   }
 
@@ -114,12 +164,13 @@ export default function CollegesPage() {
       const wb   = XLSX.read(ev.target.result, { type: 'binary' })
       const ws   = wb.Sheets[wb.SheetNames[0]]
       const data = XLSX.utils.sheet_to_json(ws, { defval: '' })
+      const validKeys = outreachStatuses.map(s => s.key)
 
       const errs = []
       data.forEach((row, i) => {
         if (!row.name) errs.push(`Row ${i + 2}: "name" is required`)
-        if (row.outreachStatus && !OUTREACH_STATUSES.includes(row.outreachStatus))
-          errs.push(`Row ${i + 2}: invalid outreachStatus "${row.outreachStatus}" — must be one of: ${OUTREACH_STATUSES.join(', ')}`)
+        if (row.outreachStatus && !validKeys.includes(row.outreachStatus))
+          errs.push(`Row ${i + 2}: invalid outreachStatus "${row.outreachStatus}" — must be one of: ${validKeys.join(', ')}`)
       })
 
       setBulkErrors(errs)
@@ -130,7 +181,7 @@ export default function CollegesPage() {
         contactName:   String(r.contactName   ?? '').trim(),
         contactEmail:  String(r.contactEmail  ?? '').trim().toLowerCase(),
         contactPhone:  String(r.contactPhone  ?? '').trim(),
-        outreachStatus: OUTREACH_STATUSES.includes(r.outreachStatus) ? r.outreachStatus : 'contacted',
+        outreachStatus: validKeys.includes(r.outreachStatus) ? r.outreachStatus : outreachStatuses[0]?.key ?? 'contacted',
       })).filter(r => r.name))
     }
     reader.readAsBinaryString(file)
@@ -149,6 +200,8 @@ export default function CollegesPage() {
       setBulkSaving(false)
     }
   }
+
+  const ayOptions = getAYOptions()
 
   return (
     <div className="space-y-5">
@@ -176,8 +229,8 @@ export default function CollegesPage() {
           onChange={e => setStatus(e.target.value)}
         >
           <option value="">All statuses</option>
-          {OUTREACH_STATUSES.map(s => (
-            <option key={s} value={s}>{OUTREACH_LABELS[s]}</option>
+          {outreachStatuses.map(s => (
+            <option key={s.key} value={s.key}>{s.label}</option>
           ))}
         </select>
       </div>
@@ -202,14 +255,24 @@ export default function CollegesPage() {
                   <td className="px-4 py-3">
                     <Link to={`/colleges/${c.id}`} className="font-medium text-brand-700 hover:underline">{c.name}</Link>
                     {c.collegeId && <span className="ml-2 text-xs font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{c.collegeId}</span>}
+                    {c.academicYear && <span className="ml-1.5 text-xs text-gray-400">{c.academicYear}</span>}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{[c.city, c.state].filter(Boolean).join(', ') || '—'}</td>
+                  <td className="px-4 py-3 text-gray-600">
+                    <div>{[c.city, c.state].filter(Boolean).join(', ') || '—'}</div>
+                    {c.mapsLink && (
+                      <a href={c.mapsLink} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-600 hover:underline">View map</a>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-gray-600">
                     <div>{c.contactName || '—'}</div>
+                    {c.contactRole && <div className="text-xs text-gray-400">{c.contactRole}</div>}
                     {c.contactEmail && <div className="text-xs text-gray-400">{c.contactEmail}</div>}
                   </td>
                   <td className="px-4 py-3">
-                    <Badge label={OUTREACH_LABELS[c.outreachStatus] ?? c.outreachStatus} className={OUTREACH_COLORS[c.outreachStatus] ?? 'bg-gray-100 text-gray-600'} />
+                    <Badge
+                      label={outreachStatuses.find(s => s.key === c.outreachStatus)?.label ?? c.outreachStatus}
+                      className={statusColor(outreachStatuses, c.outreachStatus)}
+                    />
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button onClick={() => openEdit(c)} className="text-xs text-gray-400 hover:text-gray-700">Edit</button>
@@ -225,8 +288,10 @@ export default function CollegesPage() {
       )}
 
       {/* ── Single add/edit modal ── */}
-      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Edit College' : 'Add College'}>
+      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Edit College' : 'Add College'} size="lg">
         <form onSubmit={handleSave} className="space-y-4">
+
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">College Info</p>
           <Input
             label="College Name *"
             value={form.name}
@@ -235,7 +300,6 @@ export default function CollegesPage() {
               setForm(f => ({
                 ...f,
                 name,
-                // Auto-fill shortCode only if user hasn't manually typed one
                 shortCode: f.shortCode === suggestShortCode(f.name) || f.shortCode === ''
                   ? suggestShortCode(name)
                   : f.shortCode,
@@ -262,15 +326,43 @@ export default function CollegesPage() {
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-400">3–6 uppercase letters. Once set, this never changes — it's part of every ID for this college.</p>
+            <p className="text-xs text-gray-400">3–6 uppercase letters. Once set, this never changes.</p>
           </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Academic Year</label>
+            <select
+              className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              value={form.academicYear}
+              onChange={e => setForm(f => ({ ...f, academicYear: e.target.value }))}
+            >
+              {ayOptions.map(ay => <option key={ay} value={ay}>{ay}</option>)}
+            </select>
+          </div>
+
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide pt-2">Location</p>
           <div className="grid grid-cols-2 gap-3">
             <Input label="City" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
             <Input label="State" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} />
           </div>
-          <Input label="Contact Name" value={form.contactName} onChange={e => setForm(f => ({ ...f, contactName: e.target.value }))} />
-          <Input label="Contact Email" type="email" value={form.contactEmail} onChange={e => setForm(f => ({ ...f, contactEmail: e.target.value }))} />
-          <Input label="Contact Phone" value={form.contactPhone} onChange={e => setForm(f => ({ ...f, contactPhone: e.target.value }))} />
+          <Input
+            label="Google Maps Link"
+            type="url"
+            value={form.mapsLink}
+            onChange={e => setForm(f => ({ ...f, mapsLink: e.target.value }))}
+            placeholder="https://maps.google.com/…"
+          />
+
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide pt-2">Contact at College</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Contact Name" value={form.contactName} onChange={e => setForm(f => ({ ...f, contactName: e.target.value }))} />
+            <Input label="Designation / Role" value={form.contactRole} onChange={e => setForm(f => ({ ...f, contactRole: e.target.value }))} placeholder="e.g. TPO, Principal" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Contact Email" type="email" value={form.contactEmail} onChange={e => setForm(f => ({ ...f, contactEmail: e.target.value }))} />
+            <Input label="Contact Phone" value={form.contactPhone} onChange={e => setForm(f => ({ ...f, contactPhone: e.target.value }))} />
+          </div>
+
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide pt-2">Outreach</p>
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Outreach Status</label>
             <select
@@ -278,9 +370,20 @@ export default function CollegesPage() {
               value={form.outreachStatus}
               onChange={e => setForm(f => ({ ...f, outreachStatus: e.target.value }))}
             >
-              {OUTREACH_STATUSES.map(s => <option key={s} value={s}>{OUTREACH_LABELS[s]}</option>)}
+              {outreachStatuses.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
           </div>
+
+          {form.onboardedByName && (
+            <>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide pt-2">Onboarding</p>
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-gray-700">Filled by</label>
+                <p className="text-sm text-gray-600 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">{form.onboardedByName}</p>
+              </div>
+            </>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" type="button" onClick={() => setModal(false)}>Cancel</Button>
             <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
@@ -301,7 +404,7 @@ export default function CollegesPage() {
           <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-500 space-y-1">
             <p className="font-medium text-gray-700">Expected columns:</p>
             <p><span className="font-medium text-gray-800">name *</span> · city · state · contactName · contactEmail · contactPhone · outreachStatus</p>
-            <p>Valid outreachStatus values: <code className="bg-gray-200 px-1 rounded">{OUTREACH_STATUSES.join(' | ')}</code></p>
+            <p>Valid outreachStatus values: <code className="bg-gray-200 px-1 rounded">{outreachStatuses.map(s => s.key).join(' | ')}</code></p>
           </div>
 
           <div
@@ -354,7 +457,7 @@ export default function CollegesPage() {
                         <td className="pr-4 py-1">{r.city || '—'}</td>
                         <td className="pr-4 py-1">{r.state || '—'}</td>
                         <td className="pr-4 py-1">{r.contactName || '—'}</td>
-                        <td className="pr-4 py-1">{OUTREACH_LABELS[r.outreachStatus]}</td>
+                        <td className="pr-4 py-1">{outreachStatuses.find(s => s.key === r.outreachStatus)?.label ?? r.outreachStatus}</td>
                       </tr>
                     ))}
                     {bulkRows.length > 6 && (

@@ -10,6 +10,7 @@ import {
   createInvite, getPendingUsers, getInvites,
   getPermissions, setPermissions,
   getCustomRoles, saveCustomRoles,
+  getOutreachStatuses, saveOutreachStatuses,
 } from '../../api/firestore'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../../firebase'
@@ -520,6 +521,105 @@ function PermissionsTab() {
   )
 }
 
+// ─── Outreach Statuses Card ───────────────────────────────────────────────────
+
+function OutreachStatusesCard() {
+  const [statuses, setStatuses]           = useState([])
+  const [loading, setLoading]             = useState(true)
+  const [saving, setSaving]               = useState(false)
+  const [saved, setSaved]                 = useState(false)
+  const [newLabel, setNewLabel]           = useState('')
+  const [addError, setAddError]           = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(null)
+
+  useEffect(() => {
+    getOutreachStatuses().then(s => { setStatuses(s); setLoading(false) })
+  }, [])
+
+  const handleAdd = (e) => {
+    e.preventDefault()
+    setAddError('')
+    const label = newLabel.trim()
+    if (!label) return
+    const key = toRoleKey(label)
+    if (!key) { setAddError('Invalid name.'); return }
+    if (statuses.find(s => s.key === key)) { setAddError('A status with this name already exists.'); return }
+    setStatuses(prev => [...prev, { key, label }])
+    setNewLabel('')
+    setSaved(false)
+  }
+
+  const handleDelete = (key) => {
+    setStatuses(prev => prev.filter(s => s.key !== key))
+    setConfirmDelete(null)
+    setSaved(false)
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    await saveOutreachStatuses(statuses)
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  if (loading) return <Card className="p-6"><Spinner /></Card>
+
+  return (
+    <Card className="p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700">Outreach Status Options</h2>
+          <p className="text-xs text-gray-500 mt-0.5">Manage the dropdown values shown when adding or editing a college.</p>
+        </div>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving…' : saved ? 'Saved!' : 'Save changes'}
+        </Button>
+      </div>
+
+      <div className="space-y-1">
+        {statuses.map((s, i) => (
+          <div key={s.key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 border border-gray-100">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-400 font-mono w-5 text-right">{i + 1}</span>
+              <div>
+                <p className="text-sm text-gray-800">{s.label}</p>
+                <p className="text-xs text-gray-400 font-mono">{s.key}</p>
+              </div>
+            </div>
+            {confirmDelete === s.key ? (
+              <div className="flex gap-2 text-xs">
+                <button onClick={() => handleDelete(s.key)} className="text-red-600 hover:underline">Confirm</button>
+                <span className="text-gray-300">|</span>
+                <button onClick={() => setConfirmDelete(null)} className="text-gray-400 hover:underline">Cancel</button>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmDelete(s.key)} className="text-xs text-gray-300 hover:text-red-400 transition-colors">Remove</button>
+            )}
+          </div>
+        ))}
+        {statuses.length === 0 && <p className="text-xs text-gray-400 py-2">No statuses defined.</p>}
+      </div>
+
+      <form onSubmit={handleAdd} className="flex gap-3 items-end pt-1">
+        <div className="flex-1">
+          <Input
+            label="New status name"
+            value={newLabel}
+            onChange={e => { setNewLabel(e.target.value); setAddError('') }}
+            placeholder="e.g. Demo Scheduled"
+          />
+          {newLabel && (
+            <p className="text-xs text-gray-400 mt-1">Key: <code className="bg-gray-100 px-1 rounded">{toRoleKey(newLabel)}</code></p>
+          )}
+          {addError && <p className="text-xs text-red-500 mt-1">{addError}</p>}
+        </div>
+        <Button type="submit" disabled={!newLabel.trim()}>Add status</Button>
+      </form>
+    </Card>
+  )
+}
+
 // ─── General Tab ──────────────────────────────────────────────────────────────
 
 function GeneralTab() {
@@ -552,6 +652,8 @@ function GeneralTab() {
           <p className="text-gray-400 pt-1">Example: <code className="bg-white border border-gray-200 px-1.5 py-0.5 rounded text-brand-700 font-semibold">JNTUH-2627-001</code></p>
         </div>
       </Card>
+
+      <OutreachStatusesCard />
 
       {/* Guest Access */}
       <Card className="p-6">
