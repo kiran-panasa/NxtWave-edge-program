@@ -70,6 +70,7 @@ function UsersTab() {
   const [invites, setInvites]           = useState([])
   const [copied, setCopied]             = useState('')  // token being copied
   const [changingRole, setChangingRole] = useState({}) // userId → true while saving
+  const [pendingRole, setPendingRole]   = useState({}) // userId → unsaved role selection
 
   // Default role to first available when roles load
   useEffect(() => {
@@ -269,14 +270,39 @@ function UsersTab() {
                     ) : (
                       <div className="flex items-center gap-1.5">
                         <select
-                          className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-50"
-                          value={u.role ?? ''}
-                          onChange={e => changeRole(u, e.target.value)}
+                          className={`text-xs border rounded-md px-2 py-1 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-50 ${
+                            pendingRole[u.id] && pendingRole[u.id] !== u.role ? 'border-brand-400' : 'border-gray-200'
+                          }`}
+                          value={pendingRole[u.id] ?? u.role ?? ''}
+                          onChange={e => setPendingRole(prev => ({ ...prev, [u.id]: e.target.value }))}
                           disabled={changingRole[u.id]}
                         >
                           {roles.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
                         </select>
-                        {changingRole[u.id] && <Spinner size="sm" />}
+                        {pendingRole[u.id] && pendingRole[u.id] !== u.role ? (
+                          <>
+                            <button
+                              className="text-xs text-brand-600 hover:text-brand-800 font-medium disabled:opacity-50"
+                              onClick={async () => {
+                                const newRole = pendingRole[u.id]
+                                setPendingRole(prev => { const n = { ...prev }; delete n[u.id]; return n })
+                                await changeRole(u, newRole)
+                              }}
+                              disabled={changingRole[u.id]}
+                            >
+                              Save
+                            </button>
+                            <button
+                              className="text-xs text-gray-400 hover:text-gray-700"
+                              onClick={() => setPendingRole(prev => { const n = { ...prev }; delete n[u.id]; return n })}
+                              disabled={changingRole[u.id]}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : changingRole[u.id] ? (
+                          <Spinner size="sm" />
+                        ) : null}
                       </div>
                     )}
                   </td>
