@@ -7,25 +7,10 @@ import Badge from '../../components/ui/Badge'
 import Modal from '../../components/ui/Modal'
 import Input from '../../components/ui/Input'
 import Spinner from '../../components/ui/Spinner'
-import { getColleges, createCollege, updateCollege, batchUpsertColleges, getOutreachStatuses } from '../../api/firestore'
-import { OUTREACH_LABELS, OUTREACH_STATUSES } from '../../utils/stages'
+import { getColleges, createCollege, updateCollege, batchUpsertColleges, getOutreachStatuses, DEFAULT_OUTREACH_STATUSES } from '../../api/firestore'
 import { useAuth } from '../../contexts/AuthContext'
+import { outreachStatusColor } from '../../utils/statuses'
 
-const COLOR_PALETTE = [
-  'bg-gray-100 text-gray-600',
-  'bg-blue-100 text-blue-700',
-  'bg-yellow-100 text-yellow-700',
-  'bg-green-100 text-green-700',
-  'bg-purple-100 text-purple-700',
-  'bg-orange-100 text-orange-700',
-  'bg-pink-100 text-pink-700',
-  'bg-teal-100 text-teal-700',
-]
-
-const statusColor = (statuses, key) => {
-  const idx = statuses.findIndex(s => s.key === key)
-  return COLOR_PALETTE[Math.max(0, idx) % COLOR_PALETTE.length]
-}
 
 function currentAY() {
   const now = new Date()
@@ -44,7 +29,6 @@ function ayToCompact(ay) {
   return s + e
 }
 
-const DEFAULT_STATUSES = OUTREACH_STATUSES.map(key => ({ key, label: OUTREACH_LABELS[key] }))
 
 const suggestCampusCode = (city) =>
   city.trim().replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase()
@@ -81,7 +65,7 @@ export default function CollegesPage() {
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState('')
   const [statusFilter, setStatus] = useState('')
-  const [outreachStatuses, setOutreachStatuses] = useState(DEFAULT_STATUSES)
+  const [outreachStatuses, setOutreachStatuses] = useState(DEFAULT_OUTREACH_STATUSES)
 
   // single add/edit modal
   const [modal, setModal]     = useState(false)
@@ -272,7 +256,7 @@ export default function CollegesPage() {
                   <td className="px-4 py-3">
                     <Badge
                       label={outreachStatuses.find(s => s.key === c.outreachStatus)?.label ?? c.outreachStatus}
-                      className={statusColor(outreachStatuses, c.outreachStatus)}
+                      className={outreachStatusColor(outreachStatuses, c.outreachStatus)}
                     />
                   </td>
                   <td className="px-4 py-3 text-right">

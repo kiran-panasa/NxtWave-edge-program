@@ -13,23 +13,13 @@ import {
   getDriveExpensesByCollege, createDriveExpense, updateDriveExpense,
   submitDriveExpense, getDriveExpense, getDrivesByCollege, getDrive,
   requestCollegeDeletion, approveCollegeDeletion, denyCollegeDeletion,
+  getOutreachStatuses, DEFAULT_OUTREACH_STATUSES,
 } from '../../api/firestore'
-import { STAGE_LABELS, STAGE_COLORS, OUTREACH_LABELS } from '../../utils/stages'
+import { STAGE_LABELS, STAGE_COLORS } from '../../utils/stages'
 import { useAuth } from '../../contexts/AuthContext'
+import { driveStatusLabel, driveStatusColor, expenseStatusColor, outreachStatusColor } from '../../utils/statuses'
 
-const OUTREACH_COLORS = {
-  contacted:            'bg-gray-100 text-gray-600',
-  agreed:               'bg-blue-100 text-blue-700',
-  assessment_scheduled: 'bg-yellow-100 text-yellow-700',
-  assessment_done:      'bg-green-100 text-green-700',
-}
 
-const STATUS_COLORS = {
-  draft:     'bg-gray-100 text-gray-600',
-  submitted: 'bg-yellow-100 text-yellow-700',
-  approved:  'bg-green-100 text-green-700',
-  rejected:  'bg-red-100 text-red-700',
-}
 
 export default function CollegeDetail() {
   const { id }      = useParams()
@@ -45,6 +35,7 @@ export default function CollegeDetail() {
   const [drives, setDrives]           = useState([])
   const [loading, setLoading]         = useState(true)
   const [tab, setTab]                 = useState('drives')
+  const [outreachStatuses, setOutreachStatuses] = useState(DEFAULT_OUTREACH_STATUSES)
 
   // Deletion request state
   const [deletionModal, setDeletionModal]     = useState(false)
@@ -76,12 +67,14 @@ export default function CollegeDetail() {
       getAssessmentsByCollege(id),
       getDriveExpensesByCollege(id),
       getDrivesByCollege(id),
-    ]).then(([c, s, a, e, d]) => {
+      getOutreachStatuses(),
+    ]).then(([c, s, a, e, d, o]) => {
       setCollege(c.status === 'fulfilled' ? c.value : null)
       setStudents(s.status === 'fulfilled' ? s.value : [])
       setAssessments(a.status === 'fulfilled' ? a.value : [])
       setExpenses(e.status === 'fulfilled' ? e.value : [])
       setDrives(d.status === 'fulfilled' ? d.value : [])
+      if (o.status === 'fulfilled') setOutreachStatuses(o.value)
     }).finally(() => setLoading(false))
   }, [id])
 
@@ -202,8 +195,8 @@ export default function CollegeDetail() {
         </div>
         <div className="flex items-center gap-2">
           <Badge
-            label={OUTREACH_LABELS[college.outreachStatus] ?? college.outreachStatus}
-            className={OUTREACH_COLORS[college.outreachStatus] ?? 'bg-gray-100 text-gray-600'}
+            label={outreachStatuses.find(s => s.key === college.outreachStatus)?.label ?? college.outreachStatus}
+            className={outreachStatusColor(outreachStatuses, college.outreachStatus)}
           />
           {isOnboardingTeam && !college.deleted && !college.deletionRequest && (
             <button
@@ -458,7 +451,7 @@ export default function CollegeDetail() {
                       ₹{(exp.totalAmount ?? 0).toLocaleString('en-IN')}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge label={exp.status} className={STATUS_COLORS[exp.status] ?? 'bg-gray-100 text-gray-600'} />
+                      <Badge label={exp.status} className={expenseStatusColor(exp.status)} />
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => openViewExpense(exp)} className="text-xs text-brand-600 hover:underline">
@@ -545,25 +538,7 @@ export default function CollegeDetail() {
 
 // ── Drives Tab ────────────────────────────────────────────────────────────────
 
-const DRIVE_STATUS_COLORS = {
-  draft:             'bg-gray-100 text-gray-600',
-  pending_approval:  'bg-yellow-100 text-yellow-700',
-  changes_requested: 'bg-orange-100 text-orange-700',
-  approved:          'bg-blue-100 text-blue-700',
-  college_confirmed: 'bg-purple-100 text-purple-700',
-  completed:         'bg-green-100 text-green-700',
-  cancelled:         'bg-red-100 text-red-700',
-}
 
-const DRIVE_STATUS_LABELS = {
-  draft:             'Draft',
-  pending_approval:  'Pending Approval',
-  changes_requested: 'Changes Requested',
-  approved:          'Approved',
-  college_confirmed: 'College Confirmed',
-  completed:         'Completed',
-  cancelled:         'Cancelled',
-}
 
 function DrivesTab({ college, drives, onRefresh }) {
   const { profile } = useAuth()
@@ -639,8 +614,8 @@ function DrivesTab({ college, drives, onRefresh }) {
                       <td className="px-4 py-3 text-gray-500">{d.timeSlot ?? '—'}</td>
                       <td className="px-4 py-3 text-gray-500">{d.expectedStudentCount ?? '—'}</td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${DRIVE_STATUS_COLORS[d.status] ?? 'bg-gray-100 text-gray-500'}`}>
-                          {DRIVE_STATUS_LABELS[d.status] ?? d.status}
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${driveStatusColor(d.status)}`}>
+                          {driveStatusLabel(d.status)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-400">

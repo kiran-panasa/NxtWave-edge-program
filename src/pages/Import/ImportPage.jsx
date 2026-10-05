@@ -13,15 +13,8 @@ import {
   updateCollege,
 } from '../../api/firestore'
 import { STAGES } from '../../utils/stages'
+import { driveStatusLabel } from '../../utils/statuses'
 
-const DRIVE_STATUS_LABELS = {
-  draft:             'Draft',
-  pending_approval:  'Pending Approval',
-  changes_requested: 'Changes Requested',
-  approved:          'Approved',
-  college_confirmed: 'Confirmed',
-  completed:         'Completed',
-}
 
 const TYPE_CONFIG = {
   registration: {
@@ -250,7 +243,7 @@ export default function ImportPage() {
                 <option value="">No drive — standalone import</option>
                 {drives.map(d => (
                   <option key={d.id} value={d.id}>
-                    {d.proposedDate} · {d.academicYear} · {DRIVE_STATUS_LABELS[d.status] ?? d.status}
+                    {d.proposedDate} · {d.academicYear} · {driveStatusLabel(d.status)}
                   </option>
                 ))}
               </select>

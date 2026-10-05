@@ -12,13 +12,8 @@ import {
   approveDriveExpense, rejectDriveExpense, getDriveExpense,
 } from '../../api/firestore'
 import { useAuth } from '../../contexts/AuthContext'
+import { expenseStatusColor } from '../../utils/statuses'
 
-const STATUS_COLORS = {
-  draft:     'bg-gray-100 text-gray-600',
-  submitted: 'bg-yellow-100 text-yellow-700',
-  approved:  'bg-green-100 text-green-700',
-  rejected:  'bg-red-100 text-red-700',
-}
 
 const REJECTION_REASONS = [
   'Receipts missing',
@@ -244,7 +239,7 @@ export default function ExpensesPage() {
                   <td className="px-4 py-3 text-gray-600">{fmt(catTotal(exp.accommodation))}</td>
                   <td className="px-4 py-3 font-semibold text-gray-800">{fmt(exp.totalAmount ?? 0)}</td>
                   <td className="px-4 py-3">
-                    <Badge label={exp.status} className={STATUS_COLORS[exp.status] ?? 'bg-gray-100 text-gray-600'} />
+                    <Badge label={exp.status} className={expenseStatusColor(exp.status)} />
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{exp.submittedBy ?? '—'}</td>
                   <td className="px-4 py-3 text-right">
@@ -290,7 +285,7 @@ export default function ExpensesPage() {
                 {selected.driveDate && <span>Date: <strong>{selected.driveDate}</strong> · </span>}
                 Submitted by: <strong>{selected.submittedBy ?? '—'}</strong>
               </div>
-              <Badge label={selected.status} className={STATUS_COLORS[selected.status] ?? 'bg-gray-100 text-gray-600'} />
+              <Badge label={selected.status} className={expenseStatusColor(selected.status)} />
             </div>
 
             {selected.status === 'rejected' && selected.rejectionReason && (

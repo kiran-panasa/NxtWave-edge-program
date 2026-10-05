@@ -5,7 +5,7 @@ import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
 import { getStudentsPage, getColleges } from '../../api/firestore'
-import { STAGE_LABELS, STAGE_COLORS, STAGES } from '../../utils/stages'
+import { STAGE_LABELS, STAGE_COLORS } from '../../utils/stages'
 import { useAuth } from '../../contexts/AuthContext'
 
 const STAGE_OPTIONS = Object.entries(STAGE_LABELS).map(([k, v]) => ({ value: k, label: v }))
@@ -24,7 +24,7 @@ export default function StudentsPage() {
     if (isGuest) { setLoading(false); return }
     const setter = reset ? setLoading : setLoadingMore
     setter(true)
-    const { students: rows, lastDoc: last } = await getStudentsPage({
+    const { students: rows, lastDoc: last, hasMore: more } = await getStudentsPage({
       collegeId: filters.collegeId || undefined,
       stage:     filters.stage     || undefined,
       after,
@@ -32,7 +32,7 @@ export default function StudentsPage() {
     if (reset) setStudents(rows)
     else        setStudents(prev => [...prev, ...rows])
     setLastDoc(last)
-    setHasMore(rows.length === 50)
+    setHasMore(more)
     setter(false)
   }, [filters])
 

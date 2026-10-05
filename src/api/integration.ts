@@ -1,5 +1,11 @@
 import { initializeApp, getApps } from 'firebase/app'
-import { getFirestore, collection, addDoc, getDoc, doc, query, where, getDocs } from 'firebase/firestore'
+import { getFirestore, collection, addDoc, query, where, getDocs } from 'firebase/firestore'
+import type { Student } from '../types'
+
+// TODO(phase 4): replace this direct cross-project Firestore access with
+// interview-coordinator's authenticated HTTP API. This connection never
+// signs in, and interview-coordinator's rules require auth, so these calls
+// are rejected in production.
 
 // Second Firebase app instance pointing at the scheduling (interview-coordinator) project
 const SCHEDULING_CONFIG = {
@@ -18,7 +24,7 @@ function getSchedulingDb() {
  * Push a shortlisted student to the scheduling app's /candidates collection.
  * Returns the created candidate doc ID in the scheduling app.
  */
-export const pushCandidateToSchedulingApp = async (student, interviewType) => {
+export const pushCandidateToSchedulingApp = async (student: Student, interviewType: string) => {
   const db = getSchedulingDb()
   const ref = await addDoc(collection(db, 'candidates'), {
     name:          student.name,
@@ -37,21 +43,12 @@ export const pushCandidateToSchedulingApp = async (student, interviewType) => {
  * Fetch completed interview feedback from the scheduling app for a given candidate.
  * Returns array of interview docs matching the candidate's scheduling-app ID.
  */
-export const fetchInterviewFeedback = async (schedulingCandidateId) => {
+export const fetchInterviewFeedback = async (schedulingCandidateId: string) => {
   const db = getSchedulingDb()
   const q = query(
     collection(db, 'interviews'),
     where('candidateId', '==', schedulingCandidateId)
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
-}
-
-/**
- * Fetch a single interview record from the scheduling app.
- */
-export const fetchSingleInterview = async (interviewId) => {
-  const db = getSchedulingDb()
-  const d = await getDoc(doc(db, 'interviews', interviewId))
-  return d.exists() ? { id: d.id, ...d.data() } : null
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as Record<string, any>)
 }

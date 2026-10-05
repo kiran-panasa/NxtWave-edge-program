@@ -12,25 +12,8 @@ import {
 } from '../api/firestore'
 import { FUNNEL_STAGES } from '../utils/stages'
 import { useAuth } from '../contexts/AuthContext'
+import { driveStatusLabel, driveStatusColor } from '../utils/statuses'
 
-const DRIVE_STATUS_LABELS = {
-  draft:             'Draft',
-  pending_approval:  'Pending Approval',
-  changes_requested: 'Changes Requested',
-  approved:          'Approved',
-  college_confirmed: 'College Confirmed',
-  completed:         'Completed',
-  cancelled:         'Cancelled',
-}
-const DRIVE_STATUS_COLORS = {
-  draft:             'bg-gray-100 text-gray-500',
-  pending_approval:  'bg-yellow-100 text-yellow-700',
-  changes_requested: 'bg-orange-100 text-orange-700',
-  approved:          'bg-blue-100 text-blue-700',
-  college_confirmed: 'bg-indigo-100 text-indigo-700',
-  completed:         'bg-green-100 text-green-700',
-  cancelled:         'bg-red-100 text-red-600',
-}
 
 function StatCard({ label, value, sub }) {
   return (
@@ -65,8 +48,8 @@ function FunnelBar({ label, count, max, index }) {
 
 function DriveStatusBadge({ status }) {
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${DRIVE_STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-500'}`}>
-      {DRIVE_STATUS_LABELS[status] ?? status}
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${driveStatusColor(status)}`}>
+      {driveStatusLabel(status)}
     </span>
   )
 }

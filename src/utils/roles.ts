@@ -27,5 +27,5 @@ export const DEFAULT_PERMISSIONS = {
   field_team:      ['dashboard', 'calendar', 'colleges'],
 }
 
-export const toRoleKey = (label) =>
+export const toRoleKey = (label: string) =>
   label.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')

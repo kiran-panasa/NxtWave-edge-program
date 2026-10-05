@@ -4,26 +4,9 @@ import Input from '../../components/ui/Input'
 import Spinner from '../../components/ui/Spinner'
 import { updateDrive, addDriveHistory, updateDriveInfra, getAllUsers } from '../../api/firestore'
 import { useAuth } from '../../contexts/AuthContext'
+import { driveStatusLabel, driveStatusColor } from '../../utils/statuses'
 
-const STATUS_COLORS = {
-  draft:             'bg-gray-100 text-gray-600',
-  pending_approval:  'bg-yellow-100 text-yellow-700',
-  changes_requested: 'bg-orange-100 text-orange-700',
-  approved:          'bg-blue-100 text-blue-700',
-  college_confirmed: 'bg-purple-100 text-purple-700',
-  completed:         'bg-green-100 text-green-700',
-  cancelled:         'bg-red-100 text-red-700',
-}
 
-const STATUS_LABELS = {
-  draft:             'Draft',
-  pending_approval:  'Pending Approval',
-  changes_requested: 'Changes Requested',
-  approved:          'Approved',
-  college_confirmed: 'College Confirmed',
-  completed:         'Completed',
-  cancelled:         'Cancelled',
-}
 
 const INFRA_FIELDS = [
   { key: 'invigilatorSupport',  label: 'Invigilator Support',  type: 'text',     placeholder: 'e.g. 3 faculty members' },
@@ -161,8 +144,8 @@ export default function DriveDetail({ drive, onUpdate, onClose }) {
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[drive.status]}`}>
-              {STATUS_LABELS[drive.status] ?? drive.status}
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${driveStatusColor(drive.status)}`}>
+              {driveStatusLabel(drive.status)}
             </span>
             <span className="text-xs text-gray-400">{drive.academicYear}</span>
           </div>

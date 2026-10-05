@@ -99,11 +99,3 @@ export const AUDIT_STAGES = {
     label:        'Post-TR2',
   },
 }
-
-export const OUTREACH_STATUSES = ['contacted', 'agreed', 'assessment_scheduled', 'assessment_done']
-export const OUTREACH_LABELS   = {
-  contacted:            'Contacted',
-  agreed:               'Agreed',
-  assessment_scheduled: 'Assessment Scheduled',
-  assessment_done:      'Assessment Done',
-}
